@@ -1,0 +1,10 @@
+.env
+*.pdf
+*.csv
+*.xlsx
+*.ofx
+*.qfx
+*.qbo
+*.md
+!README.md
+!docs/**/*.md
