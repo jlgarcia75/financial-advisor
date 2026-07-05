@@ -1,0 +1,30 @@
+{
+  "fields": [
+    {
+      "name": "statement_id",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "metric",
+      "type": "string"
+    },
+    {
+      "name": "reporting_month_or_quarter_to_date",
+      "type": "number"
+    },
+    {
+      "name": "year_to_date",
+      "type": "number"
+    },
+    {
+      "name": "source_section",
+      "type": "string"
+    }
+  ],
+  "missingValues": [
+    ""
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "fields": [
+    {
+      "name": "statement_id",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "account_id",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "account_name",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "account_type",
+      "type": "string"
+    },
+    {
+      "name": "asset_class",
+      "type": "string"
+    },
+    {
+      "name": "security_name",
+      "type": "string"
+    },
+    {
+      "name": "symbol",
+      "type": "string"
+    },
+    {
+      "name": "shares",
+      "type": "number"
+    },
+    {
+      "name": "quantity",
+      "type": "number"
+    },
+    {
+      "name": "current_price",
+      "type": "number"
+    },
+    {
+      "name": "market_value",
+      "type": "number"
+    },
+    {
+      "name": "percent_of_account",
+      "type": "number"
+    },
+    {
+      "name": "cost_basis",
+      "type": "string"
+    },
+    {
+      "name": "price_paid",
+      "type": "string"
+    },
+    {
+      "name": "date_acquired",
+      "type": "string"
+    },
+    {
+      "name": "date_sold",
+      "type": "string"
+    },
+    {
+      "name": "source_section",
+      "type": "string"
+    }
+  ],
+  "missingValues": [
+    ""
+  ]
+}
