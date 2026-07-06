@@ -33,9 +33,9 @@ import csv
 import json
 import re
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 DATE_RE = re.compile(r"\b\d{2}/\d{2}/\d{4}\b")
 MONEY_RE = re.compile(r"\(?\$?\s*[-+]?\d[\d,]*\.\d{2}\s*\)?")
@@ -545,6 +545,7 @@ def extract_holdings(
             current_account_name = m.group(2).strip()
             current_account_type = None
             current_asset_class = None
+            assert current_account_id is not None
             account_summaries.setdefault(
                 current_account_id,
                 {
@@ -721,31 +722,6 @@ def main() -> int:
     holdings, accounts = extract_holdings(text, statement_id)
     transactions = extract_transactions(text, statement_id)
     activity = extract_activity_rows(text, statement_id)
-
-    statement = {
-        **metadata,
-        "account_type_detected": "brokerage",
-        "sections": summarize_sections(text),
-        "household_snapshot": extract_household_snapshot(text),
-        "accounts": accounts,
-        "holdings": [asdict(h) for h in holdings],
-        "transactions": [asdict(t) for t in transactions],
-        "activity": activity,
-        "extraction": {
-            "tool": "extract_empower_statement.py",
-            "extracted_at": datetime.now(timezone.utc)
-            .replace(microsecond=0)
-            .isoformat()
-            + "Z",
-            "source_format": "markitdown_md",
-            "quality_flags": [
-                "Empower statement has holdings and transaction tables split across pages.",
-                "Cost basis, tax lots, date acquired, and realized gain/loss are not present in the visible Account Holdings tables and are emitted as null.",
-                "Price paid is available for buy/sell transaction rows as transaction price, not as position cost basis.",
-                "Use the custodian statement/1099 for tax-lot and tax reporting.",
-            ],
-        },
-    }
 
     base = out_dir / statement_id
 
