@@ -3,8 +3,8 @@ set -euo pipefail
 
 REPO_DIR="${0:A:h:h}"
 ENV_FILE="$REPO_DIR/.env"
-TEMPLATE="$REPO_DIR/launchd/com.jesus.finance-statements.plist.template"
-TARGET="$HOME/Library/LaunchAgents/com.jesus.finance-statements.plist"
+TEMPLATE="$REPO_DIR/launchd/com.jesus.finance_statements.plist.template"
+TARGET="$HOME/Library/LaunchAgents/com.jesus.finance_statements.plist"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Missing .env at $ENV_FILE" >&2
@@ -35,7 +35,7 @@ plutil -lint "$TARGET"
 
 launchctl bootout "gui/$(id -u)" "$TARGET" 2>/dev/null || true
 launchctl bootstrap "gui/$(id -u)" "$TARGET"
-launchctl enable "gui/$(id -u)/com.jesus.finance-statements"
+launchctl enable "gui/$(id -u)/com.jesus.finance_statements"
 
 echo "Installed LaunchAgent: $TARGET"
-launchctl print "gui/$(id -u)/com.jesus.finance-statements" | head -40
+launchctl print "gui/$(id -u)/com.jesus.finance_statements" | head -40

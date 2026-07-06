@@ -8,13 +8,13 @@
 <dict>
 
     <key>Label</key>
-    <string>com.jesus.finance-statements</string>
+    <string>com.jesus.finance_statements</string>
 
     <key>ProgramArguments</key>
 
     <array>
         <string>/bin/zsh</string>
-        <string>/Users/jesusgarcia/git/financial-advisor/scripts/finance-statements.zsh</string>
+        <string>/Users/jesusgarcia/git/financial-advisor/scripts/finance_statements.zsh</string>
     </array>
 
     <key>WatchPaths</key>

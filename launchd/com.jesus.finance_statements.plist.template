@@ -4,12 +4,12 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.jesus.finance-statements</string>
+    <string>com.jesus.finance_statements</string>
 
     <key>ProgramArguments</key>
     <array>
         <string>/bin/zsh</string>
-        <string>__REPO_DIR__/scripts/finance-statements.zsh</string>
+        <string>__REPO_DIR__/scripts/finance_statements.zsh</string>
     </array>
 
     <key>WatchPaths</key>
@@ -21,10 +21,10 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>__REPO_DIR__/logs/finance-statements.out.log</string>
+    <string>__REPO_DIR__/logs/finance_statements.out.log</string>
 
     <key>StandardErrorPath</key>
-    <string>__REPO_DIR__/logs/finance-statements.err.log</string>
+    <string>__REPO_DIR__/logs/finance_statements.err.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
