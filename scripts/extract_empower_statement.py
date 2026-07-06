@@ -33,11 +33,10 @@ import argparse
 import csv
 import json
 import re
-from dataclasses import dataclass, asdict
-from datetime import datetime
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
-
 
 DATE_RE = re.compile(r"\b\d{2}/\d{2}/\d{4}\b")
 MONEY_RE = re.compile(r"\(?\$?\s*[-+]?\d[\d,]*\.\d{2}\s*\)?")
@@ -52,7 +51,9 @@ HOLDING_PLAIN_RE = re.compile(
     r"(?P<pct>\d[\d,]*\.\d{2})$"
 )
 
-TOTAL_RE = re.compile(r"^Total\s+(?P<label>.+?)\s+\$?(?P<value>[\d,]+\.\d{2})\s+(?P<pct>[\d,]+\.\d{2})\s*%?$")
+TOTAL_RE = re.compile(
+    r"^Total\s+(?P<label>.+?)\s+\$?(?P<value>[\d,]+\.\d{2})\s+(?P<pct>[\d,]+\.\d{2})\s*%?$"
+)
 
 
 @dataclass
@@ -151,7 +152,9 @@ def get_frontmatter(text: str) -> dict[str, Any]:
     return data
 
 
-def extract_statement_metadata(text: str, source_file: str | None = None) -> dict[str, Any]:
+def extract_statement_metadata(
+    text: str, source_file: str | None = None
+) -> dict[str, Any]:
     fm = get_frontmatter(text)
     statement_id = fm.get("statement_id")
     if not statement_id and source_file:
@@ -161,7 +164,9 @@ def extract_statement_metadata(text: str, source_file: str | None = None) -> dic
         m = re.search(pattern, text, flags=re.I)
         return m.group(1).strip() if m else None
 
-    household = first(r"Household\s+\|?\s*:([A-Za-z ,#]+)") or first(r"Household\s*:([A-Za-z ,#]+)")
+    household = first(r"Household\s+\|?\s*:([A-Za-z ,#]+)") or first(
+        r"Household\s*:([A-Za-z ,#]+)"
+    )
     run_date = first(r"Run Date\s*\|?\s*:?\s*(\d{2}/\d{2}/\d{4})")
     as_of_date = first(r"As of Date\s*\|?\s*:?\s*(\d{2}/\d{2}/\d{4})")
     inception_date = first(r"Inception Date\s*\|?\s*:?\s*(\d{2}/\d{2}/\d{4})")
@@ -207,7 +212,7 @@ def extract_household_snapshot(text: str) -> dict[str, Any]:
         for i, cell in enumerate(cells):
             label = cell.strip()
             if label in label_to_key:
-                for nxt in cells[i + 1:]:
+                for nxt in cells[i + 1 :]:
                     val = parse_number(nxt)
                     if val is not None:
                         out[label_to_key[label]] = val
@@ -244,13 +249,15 @@ def extract_activity_rows(text: str, statement_id: str) -> list[dict[str, Any]]:
             "Change in Value",
             "Change in Value %",
         }:
-            rows.append({
-                "statement_id": statement_id,
-                "metric": cells[0],
-                "reporting_month_or_quarter_to_date": parse_number(cells[1]),
-                "year_to_date": parse_number(cells[2]),
-                "source_section": "Activity at a Glance",
-            })
+            rows.append(
+                {
+                    "statement_id": statement_id,
+                    "metric": cells[0],
+                    "reporting_month_or_quarter_to_date": parse_number(cells[1]),
+                    "year_to_date": parse_number(cells[2]),
+                    "source_section": "Activity at a Glance",
+                }
+            )
     # Deduplicate exact rows caused by household/portfolio repeats.
     dedup: dict[tuple, dict[str, Any]] = {}
     for r in rows:
@@ -277,18 +284,22 @@ def guess_symbol_and_name(description: str) -> tuple[str | None, str]:
     return None, description
 
 
-def parse_transaction_row_from_cells(cells: list[str], current_type: str, statement_id: str) -> Transaction | None:
+def parse_transaction_row_from_cells(
+    cells: list[str], current_type: str, statement_id: str
+) -> Transaction | None:
     if len(cells) < 5:
         return None
 
     # Most rows are: Description | Date | Account | Quantity | Price | Transaction Amount
-    date_idx = next((i for i, c in enumerate(cells) if DATE_RE.fullmatch(c.strip())), None)
+    date_idx = next(
+        (i for i, c in enumerate(cells) if DATE_RE.fullmatch(c.strip())), None
+    )
     if date_idx is None or date_idx == 0:
         return None
 
     description = " ".join(cells[:date_idx]).strip()
     date = parse_date_mmddyyyy(cells[date_idx])
-    tail = cells[date_idx + 1:]
+    tail = cells[date_idx + 1 :]
     if len(tail) < 3:
         return None
 
@@ -324,13 +335,15 @@ def parse_transaction_row_from_cells(cells: list[str], current_type: str, statem
     )
 
 
-def parse_transaction_plain(line: str, current_type: str, statement_id: str) -> Transaction | None:
+def parse_transaction_plain(
+    line: str, current_type: str, statement_id: str
+) -> Transaction | None:
     if not DATE_RE.search(line):
         return None
     date_match = DATE_RE.search(line)
     assert date_match is not None
-    description = line[:date_match.start()].strip()
-    rest = line[date_match.end():].strip()
+    description = line[: date_match.start()].strip()
+    rest = line[date_match.end() :].strip()
     date = parse_date_mmddyyyy(date_match.group())
 
     tokens = rest.split()
@@ -378,9 +391,15 @@ def extract_transactions(text: str, statement_id: str) -> list[Transaction]:
     tx_text = text[start:end] if start != -1 and end != -1 else text
 
     type_patterns = {
-        "Cash Dividends": re.compile(r"^Cash Dividends\b|^\|\s*Cash Dividends\s*\|", re.I),
-        "Miscellaneous Income": re.compile(r"^Miscellaneous Income\b|^\|\s*Miscellaneous Income\s*\|", re.I),
-        "Miscellaneous Expenses": re.compile(r"^Miscellaneous Expenses\b|^\|\s*Miscellaneous Expenses\s*\|", re.I),
+        "Cash Dividends": re.compile(
+            r"^Cash Dividends\b|^\|\s*Cash Dividends\s*\|", re.I
+        ),
+        "Miscellaneous Income": re.compile(
+            r"^Miscellaneous Income\b|^\|\s*Miscellaneous Income\s*\|", re.I
+        ),
+        "Miscellaneous Expenses": re.compile(
+            r"^Miscellaneous Expenses\b|^\|\s*Miscellaneous Expenses\s*\|", re.I
+        ),
         "Buys": re.compile(r"^Buys\b|^\|\s*Buys\s*\|", re.I),
         "Sells": re.compile(r"^Sells\b|^\|\s*Sells\s*\|", re.I),
     }
@@ -404,29 +423,55 @@ def extract_transactions(text: str, statement_id: str) -> list[Transaction]:
             continue
 
         cells = markdown_cells(line)
-        txn = parse_transaction_row_from_cells(cells, current_type, statement_id) if cells else parse_transaction_plain(line, current_type, statement_id)
+        txn = (
+            parse_transaction_row_from_cells(cells, current_type, statement_id)
+            if cells
+            else parse_transaction_plain(line, current_type, statement_id)
+        )
         if txn and txn.date and txn.amount is not None:
             txns.append(txn)
 
     # Deduplicate rows that appear both as table fragments and plain text.
     dedup: dict[tuple, Transaction] = {}
     for t in txns:
-        key = (t.transaction_type, t.date, t.account_id, t.symbol, t.security_name, t.quantity, t.price, t.amount)
+        key = (
+            t.transaction_type,
+            t.date,
+            t.account_id,
+            t.symbol,
+            t.security_name,
+            t.quantity,
+            t.price,
+            t.amount,
+        )
         dedup[key] = t
     return list(dedup.values())
 
 
-def parse_holding_from_cells(cells: list[str], statement_id: str, account_id: str, account_name: str, account_type: str | None, asset_class: str) -> Holding | None:
+def parse_holding_from_cells(
+    cells: list[str],
+    statement_id: str,
+    account_id: str,
+    account_name: str,
+    account_type: str | None,
+    asset_class: str,
+) -> Holding | None:
     cleaned = [c for c in cells if c and c not in {"-", "—"}]
     if len(cleaned) < 6:
         return None
     # Skip headers/totals.
-    if cleaned[0].lower().startswith(("total ", "symbol", "price", "quantity", "market value")):
+    if (
+        cleaned[0]
+        .lower()
+        .startswith(("total ", "symbol", "price", "quantity", "market value"))
+    ):
         return None
 
     # Common shape: name, symbol, price, quantity, market_value, percent.
     # Sometimes an extra filler column appears before quantity; use the last 4 numeric-like fields.
-    numeric_positions = [i for i, c in enumerate(cleaned) if parse_number(c) is not None]
+    numeric_positions = [
+        i for i, c in enumerate(cleaned) if parse_number(c) is not None
+    ]
     if len(numeric_positions) < 4:
         return None
     price_i, qty_i, mv_i, pct_i = numeric_positions[-4:]
@@ -452,7 +497,14 @@ def parse_holding_from_cells(cells: list[str], statement_id: str, account_id: st
     )
 
 
-def parse_holding_plain(line: str, statement_id: str, account_id: str, account_name: str, account_type: str | None, asset_class: str) -> Holding | None:
+def parse_holding_plain(
+    line: str,
+    statement_id: str,
+    account_id: str,
+    account_name: str,
+    account_type: str | None,
+    asset_class: str,
+) -> Holding | None:
     m = HOLDING_PLAIN_RE.match(line.strip())
     if not m:
         return None
@@ -473,7 +525,9 @@ def parse_holding_plain(line: str, statement_id: str, account_id: str, account_n
     )
 
 
-def extract_holdings(text: str, statement_id: str) -> tuple[list[Holding], list[dict[str, Any]]]:
+def extract_holdings(
+    text: str, statement_id: str
+) -> tuple[list[Holding], list[dict[str, Any]]]:
     holdings: list[Holding] = []
     account_summaries: dict[str, dict[str, Any]] = {}
 
@@ -492,14 +546,17 @@ def extract_holdings(text: str, statement_id: str) -> tuple[list[Holding], list[
             current_account_name = m.group(2).strip()
             current_account_type = None
             current_asset_class = None
-            account_summaries.setdefault(current_account_id, {
-                "statement_id": statement_id,
-                "account_id": current_account_id,
-                "account_name": current_account_name,
-                "account_type": None,
-                "total_account": None,
-                "source_section": "Account Holdings",
-            })
+            account_summaries.setdefault(
+                current_account_id,
+                {
+                    "statement_id": statement_id,
+                    "account_id": current_account_id,
+                    "account_name": current_account_name,
+                    "account_type": None,
+                    "total_account": None,
+                    "source_section": "Account Holdings",
+                },
+            )
             continue
 
         if current_account_id and plain.startswith("Account Type:"):
@@ -523,26 +580,61 @@ def extract_holdings(text: str, statement_id: str) -> tuple[list[Holding], list[
         if plain.startswith("Total Account"):
             nums = MONEY_RE.findall(plain)
             if nums:
-                account_summaries[current_account_id]["total_account"] = parse_number(nums[0])
+                account_summaries[current_account_id]["total_account"] = parse_number(
+                    nums[0]
+                )
             continue
-        if plain.startswith("Total ") or plain.startswith("Report Legend") or plain.isdigit():
+        if (
+            plain.startswith("Total ")
+            or plain.startswith("Report Legend")
+            or plain.isdigit()
+        ):
             continue
         if current_asset_class is None:
             continue
-        if any(h in plain for h in ["Symbol Price Quantity", "% of Account", "Market Value"]):
+        if any(
+            h in plain
+            for h in ["Symbol Price Quantity", "% of Account", "Market Value"]
+        ):
             continue
 
         cells = markdown_cells(line)
-        holding = parse_holding_from_cells(cells, statement_id, current_account_id, current_account_name, current_account_type, current_asset_class) if cells else None
+        holding = (
+            parse_holding_from_cells(
+                cells,
+                statement_id,
+                current_account_id,
+                current_account_name,
+                current_account_type,
+                current_asset_class,
+            )
+            if cells
+            else None
+        )
         if holding is None:
-            holding = parse_holding_plain(plain, statement_id, current_account_id, current_account_name, current_account_type, current_asset_class)
+            holding = parse_holding_plain(
+                plain,
+                statement_id,
+                current_account_id,
+                current_account_name,
+                current_account_type,
+                current_asset_class,
+            )
         if holding and holding.security_name and holding.market_value is not None:
             holdings.append(holding)
 
     # Deduplicate holdings.
     dedup: dict[tuple, Holding] = {}
     for h in holdings:
-        key = (h.account_id, h.asset_class, h.symbol, h.security_name, h.quantity, h.current_price, h.market_value)
+        key = (
+            h.account_id,
+            h.asset_class,
+            h.symbol,
+            h.security_name,
+            h.quantity,
+            h.current_price,
+            h.market_value,
+        )
         dedup[key] = h
 
     return list(dedup.values()), list(account_summaries.values())
@@ -576,7 +668,13 @@ def summarize_sections(text: str) -> list[dict[str, Any]]:
             "section": "Transactions",
             "pages": "4-10, 22",
             "purpose": "Transaction Summary and Transaction Detail by subtype.",
-            "subsections": ["Cash Dividends", "Miscellaneous Income", "Miscellaneous Expenses", "Buys", "Sells"],
+            "subsections": [
+                "Cash Dividends",
+                "Miscellaneous Income",
+                "Miscellaneous Expenses",
+                "Buys",
+                "Sells",
+            ],
             "use_for_advisor": "Income, fees, buys, sells, realized activity, cash-flow classification.",
             "extract": True,
         },
@@ -607,7 +705,9 @@ def write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> 
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Extract normalized data from an Empower statement Markdown file.")
+    parser = argparse.ArgumentParser(
+        description="Extract normalized data from an Empower statement Markdown file."
+    )
     parser.add_argument("markdown_file", type=Path)
     parser.add_argument("--out-dir", type=Path, default=None)
     args = parser.parse_args()
@@ -634,7 +734,10 @@ def main() -> int:
         "activity": activity,
         "extraction": {
             "tool": "extract_empower_statement.py",
-            "extracted_at": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+            "extracted_at": datetime.now(timezone.utc)
+            .replace(microsecond=0)
+            .isoformat()
+            + "Z",
             "source_format": "markitdown_md",
             "quality_flags": [
                 "Empower statement has holdings and transaction tables split across pages.",
@@ -646,40 +749,95 @@ def main() -> int:
     }
 
     base = out_dir / statement_id
-    (base.with_suffix(".json")).write_text(json.dumps(statement, indent=2), encoding="utf-8")
+    (base.with_suffix(".json")).write_text(
+        json.dumps(statement, indent=2), encoding="utf-8"
+    )
 
-    write_csv(base.with_name(base.name + "_holdings.csv"), [asdict(h) for h in holdings], [
-        "statement_id", "account_id", "account_name", "account_type", "asset_class",
-        "security_name", "symbol", "shares", "quantity", "current_price",
-        "market_value", "percent_of_account", "cost_basis", "price_paid",
-        "date_acquired", "date_sold", "source_section",
-    ])
-    write_csv(base.with_name(base.name + "_transactions.csv"), [asdict(t) for t in transactions], [
-        "statement_id", "transaction_type", "date", "account_id", "account_name",
-        "security_name", "symbol", "quantity", "shares", "price", "amount",
-        "cash_flow_direction", "source_section",
-    ])
-    write_csv(base.with_name(base.name + "_accounts.csv"), accounts, [
-        "statement_id", "account_id", "account_name", "account_type", "total_account", "source_section",
-    ])
-    write_csv(base.with_name(base.name + "_activity.csv"), activity, [
-        "statement_id", "metric", "reporting_month_or_quarter_to_date", "year_to_date", "source_section",
-    ])
-
-    print(json.dumps({
-        "statement_id": statement_id,
-        "holdings": len(holdings),
-        "transactions": len(transactions),
-        "accounts": len(accounts),
-        "activity_rows": len(activity),
-        "outputs": [
-            str(base.with_suffix(".json")),
-            str(base.with_name(base.name + "_holdings.csv")),
-            str(base.with_name(base.name + "_transactions.csv")),
-            str(base.with_name(base.name + "_accounts.csv")),
-            str(base.with_name(base.name + "_activity.csv")),
+    write_csv(
+        base.with_name(base.name + "_holdings.csv"),
+        [asdict(h) for h in holdings],
+        [
+            "statement_id",
+            "account_id",
+            "account_name",
+            "account_type",
+            "asset_class",
+            "security_name",
+            "symbol",
+            "shares",
+            "quantity",
+            "current_price",
+            "market_value",
+            "percent_of_account",
+            "cost_basis",
+            "price_paid",
+            "date_acquired",
+            "date_sold",
+            "source_section",
         ],
-    }, indent=2))
+    )
+    write_csv(
+        base.with_name(base.name + "_transactions.csv"),
+        [asdict(t) for t in transactions],
+        [
+            "statement_id",
+            "transaction_type",
+            "date",
+            "account_id",
+            "account_name",
+            "security_name",
+            "symbol",
+            "quantity",
+            "shares",
+            "price",
+            "amount",
+            "cash_flow_direction",
+            "source_section",
+        ],
+    )
+    write_csv(
+        base.with_name(base.name + "_accounts.csv"),
+        accounts,
+        [
+            "statement_id",
+            "account_id",
+            "account_name",
+            "account_type",
+            "total_account",
+            "source_section",
+        ],
+    )
+    write_csv(
+        base.with_name(base.name + "_activity.csv"),
+        activity,
+        [
+            "statement_id",
+            "metric",
+            "reporting_month_or_quarter_to_date",
+            "year_to_date",
+            "source_section",
+        ],
+    )
+
+    print(
+        json.dumps(
+            {
+                "statement_id": statement_id,
+                "holdings": len(holdings),
+                "transactions": len(transactions),
+                "accounts": len(accounts),
+                "activity_rows": len(activity),
+                "outputs": [
+                    str(base.with_suffix(".json")),
+                    str(base.with_name(base.name + "_holdings.csv")),
+                    str(base.with_name(base.name + "_transactions.csv")),
+                    str(base.with_name(base.name + "_accounts.csv")),
+                    str(base.with_name(base.name + "_activity.csv")),
+                ],
+            },
+            indent=2,
+        )
+    )
     return 0
 
 

@@ -18,8 +18,8 @@ SCHEMA_MAP = {
 
 def load_schema(statement_type: str, dataset: str) -> dict:
     candidates = [
-        REPO_DIR / "schema" / statement_type / SCHEMA_MAP[dataset],
-        REPO_DIR / "schema" / "empower" / SCHEMA_MAP[dataset],
+        REPO_DIR / "schemas" / statement_type / SCHEMA_MAP[dataset],
+        REPO_DIR / "schemas" / "empower" / SCHEMA_MAP[dataset],
     ]
     for path in candidates:
         if path.exists():
