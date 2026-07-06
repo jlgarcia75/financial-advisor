@@ -3,13 +3,12 @@
 extract_empower_statement.py
 
 Parse an Empower monthly report converted to Markdown by MarkItDown and emit
-normalized JSON + CSV files for a financial-advisor ingestion pipeline.
+CSV files for a financial-advisor ingestion pipeline.
 
 Input:
   2025-12_empower-garciatrust-1234_statement.md
 
 Outputs by default, next to the input file:
-  2025-12_empower-garciatrust-1234_statement.json
   2025-12_empower-garciatrust-1234_statement_holdings.csv
   2025-12_empower-garciatrust-1234_statement_transactions.csv
   2025-12_empower-garciatrust-1234_statement_accounts.csv
@@ -749,9 +748,6 @@ def main() -> int:
     }
 
     base = out_dir / statement_id
-    (base.with_suffix(".json")).write_text(
-        json.dumps(statement, indent=2), encoding="utf-8"
-    )
 
     write_csv(
         base.with_name(base.name + "_holdings.csv"),
@@ -828,7 +824,6 @@ def main() -> int:
                 "accounts": len(accounts),
                 "activity_rows": len(activity),
                 "outputs": [
-                    str(base.with_suffix(".json")),
                     str(base.with_name(base.name + "_holdings.csv")),
                     str(base.with_name(base.name + "_transactions.csv")),
                     str(base.with_name(base.name + "_accounts.csv")),
