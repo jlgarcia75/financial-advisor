@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "statement_id": "2025-12_empower-garciatrust-1234_statement",
+  "institution": "empower",
+  "statement_type": "multi_account_brokerage",
+  "as_of_date": "2025-12-31",
+  "source": {
+    "pdf": "2025-12_empower-garciatrust-1234_statement.pdf",
+    "markdown": "2025-12_empower-garciatrust-1234_statement.md"
+  },
+  "datasets": {
+    "accounts": "2025-12_empower-garciatrust-1234_statement_accounts.csv",
+    "holdings": "2025-12_empower-garciatrust-1234_statement_holdings.csv",
+    "transactions": "2025-12_empower-garciatrust-1234_statement_transactions.csv",
+    "activity": "2025-12_empower-garciatrust-1234_statement_activity.csv"
+  },
+  "account_ids": [
+    "QFA339398",
+    "BDA631373",
+    "QFA614071",
+    "A0H155128"
+  ],
+  "review_status": "ready",
+  "extraction": {
+    "extractor": "empower-statement-extractor",
+    "schema_version": "1.0"
+  }
+}

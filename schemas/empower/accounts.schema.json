@@ -1,0 +1,40 @@
+{
+  "fields": [
+    {
+      "name": "statement_id",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "account_id",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "account_name",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "account_type",
+      "type": "string"
+    },
+    {
+      "name": "total_account",
+      "type": "number"
+    },
+    {
+      "name": "source_section",
+      "type": "string"
+    }
+  ],
+  "missingValues": [
+    ""
+  ]
+}

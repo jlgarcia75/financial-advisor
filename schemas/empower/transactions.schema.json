@@ -1,0 +1,68 @@
+{
+  "fields": [
+    {
+      "name": "statement_id",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "transaction_type",
+      "type": "string"
+    },
+    {
+      "name": "date",
+      "type": "date"
+    },
+    {
+      "name": "account_id",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "account_name",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "security_name",
+      "type": "string"
+    },
+    {
+      "name": "symbol",
+      "type": "string"
+    },
+    {
+      "name": "quantity",
+      "type": "number"
+    },
+    {
+      "name": "shares",
+      "type": "number"
+    },
+    {
+      "name": "price",
+      "type": "number"
+    },
+    {
+      "name": "amount",
+      "type": "number"
+    },
+    {
+      "name": "cash_flow_direction",
+      "type": "string"
+    },
+    {
+      "name": "source_section",
+      "type": "string"
+    }
+  ],
+  "missingValues": [
+    ""
+  ]
+}
