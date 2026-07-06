@@ -5,6 +5,8 @@
 *.ofx
 *.qfx
 *.qbo
-*.md
+*_statement.md
+*_statement.json
+logs/
 !README.md
 !docs/**/*.md
