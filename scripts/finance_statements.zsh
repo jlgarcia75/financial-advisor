@@ -17,7 +17,7 @@ fi
 mkdir -p "$STATEMENTS_DIR" "$REPO_DIR/logs"
 
 log() {
-  print -r -- "[finance-statements] $(date -u +%Y-%m-%dT%H:%M:%SZ) $*"
+  print -r -- "[finance_statements] $(date -u +%Y-%m-%dT%H:%M:%SZ) $*"
 }
 
 fail_file() {
@@ -30,6 +30,8 @@ if [[ ! -x "$MARKITDOWN_BIN" ]]; then
   log "markitdown not found or not executable: $MARKITDOWN_BIN" >&2
   exit 1
 fi
+# flag for creating advisor inputs manifest if any new statements are processed
+advisor_inputs_dirty=false
 
 # 1) Convert new PDFs to Markdown.
 for pdf in "$STATEMENTS_DIR"/*_statement.pdf(N); do
@@ -116,10 +118,26 @@ for md in "$STATEMENTS_DIR"/*_statement.md(N); do
   if [[ -f "$REPO_DIR/scripts/create_statement_manifest.py" ]]; then
     log "Creating manifest for: ${md:t}"
     "$PYTHON_BIN" "$REPO_DIR/scripts/create_statement_manifest.py" "$md" --institution empower
+    # Advisor inputs manifest needs to be updated since a new statement was processed
+    advisor_inputs_dirty=true
   else
     fail_file "$md" "create_statement_manifest.py not found"
     continue
   fi
+  
+  if [[ "$advisor_inputs_dirty" == true ]]; then
+  log "Rebuilding consolidated advisor inputs"
+
+  if "$PYTHON_BIN" "$REPO_DIR/scripts/build_advisor_inputs.py"; then
+    log "Advisor inputs rebuilt successfully"
+  else
+    log "FAILED: Advisor input rebuild failed" >&2
+    exit 1
+  fi
+  else
+    log "Advisor inputs unchanged; rebuild not required"
+  fi
+
 
   log "Completed pipeline for: ${md:t}"
 done
