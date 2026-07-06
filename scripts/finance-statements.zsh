@@ -3,45 +3,40 @@ set -euo pipefail
 
 REPO_DIR="${0:A:h:h}"
 ENV_FILE="$REPO_DIR/.env"
-LOG_PREFIX="[finance-statements]"
 
-if [[ ! -f "$ENV_FILE" ]]; then
-  echo "$LOG_PREFIX Missing .env at $ENV_FILE" >&2
+if [[ -f "$ENV_FILE" ]]; then
+  source "$ENV_FILE"
+fi
+
+: "${VAULT:=/Users/jesusgarcia/ObsidianVaults/second-brain}"
+: "${FINANCE_DIR:=$VAULT/91_finance}"
+: "${STATEMENTS_DIR:=$FINANCE_DIR/Statements}"
+: "${MARKITDOWN_BIN:=/Users/jesusgarcia/.venv/bin/markitdown}"
+: "${PYTHON_BIN:=python3}"
+
+mkdir -p "$STATEMENTS_DIR" "$REPO_DIR/logs"
+
+log() {
+  print -r -- "[finance-statements] $(date -u +%Y-%m-%dT%H:%M:%SZ) $*"
+}
+
+fail_file() {
+  local file="$1"
+  local reason="$2"
+  log "FAILED: ${file:t} — $reason"
+}
+
+if [[ ! -x "$MARKITDOWN_BIN" ]]; then
+  log "markitdown not found or not executable: $MARKITDOWN_BIN" >&2
   exit 1
 fi
 
-source "$ENV_FILE"
-
-: "${STATEMENTS_DIR:?STATEMENTS_DIR must be set in .env}"
-: "${ACCOUNTS_DIR:?ACCOUNTS_DIR must be set in .env}"
-: "${REVIEWS_DIR:?REVIEWS_DIR must be set in .env}"
-
-mkdir -p "$STATEMENTS_DIR" "$ACCOUNTS_DIR" "$REVIEWS_DIR" "$REPO_DIR/logs"
-
-MARKITDOWN_BIN="${MARKITDOWN_BIN:-}"
-if [[ -z "$MARKITDOWN_BIN" ]]; then
-  MARKITDOWN_BIN="$(command -v markitdown || true)"
-fi
-
-if [[ -z "$MARKITDOWN_BIN" || ! -x "$MARKITDOWN_BIN" ]]; then
-  echo "$LOG_PREFIX markitdown not found. Set MARKITDOWN_BIN in .env or add it to PATH." >&2
-  echo "$LOG_PREFIX PATH=$PATH" >&2
-  exit 1
-fi
-
-echo "$LOG_PREFIX Running at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-echo "$LOG_PREFIX STATEMENTS_DIR=$STATEMENTS_DIR"
-echo "$LOG_PREFIX MARKITDOWN_BIN=$MARKITDOWN_BIN"
-
-found_any=false
-
+# 1) Convert new PDFs to Markdown.
 for pdf in "$STATEMENTS_DIR"/*_statement.pdf(N); do
-  found_any=true
   base="${pdf:r}"
   md="${base}.md"
 
   if [[ -f "$md" ]]; then
-    echo "$LOG_PREFIX Skipping existing markdown: ${md:t}"
     continue
   fi
 
@@ -49,7 +44,7 @@ for pdf in "$STATEMENTS_DIR"/*_statement.pdf(N); do
   statement_id="${filename:r}"
   temp_md="$(mktemp)"
 
-  echo "$LOG_PREFIX Converting: $filename"
+  log "Converting PDF to MD: $filename"
 
   if "$MARKITDOWN_BIN" "$pdf" -o "$temp_md"; then
     {
@@ -58,6 +53,8 @@ for pdf in "$STATEMENTS_DIR"/*_statement.pdf(N); do
       echo "statement_id: \"$statement_id\""
       echo "source: manual_statement"
       echo "source_file: \"$filename\""
+      echo "institution: unknown"
+      echo "statement_type: unknown"
       echo "imported_at: \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\""
       echo "status: needs_review"
       echo "contains_sensitive_financial_data: true"
@@ -66,16 +63,63 @@ for pdf in "$STATEMENTS_DIR"/*_statement.pdf(N); do
       cat "$temp_md"
     } > "$md"
 
-    echo "$LOG_PREFIX Created: ${md:t}"
+    log "Created MD: ${md:t}"
   else
-    echo "$LOG_PREFIX Failed to convert: $filename" >&2
-    rm -f "$temp_md"
-    exit 1
+    fail_file "$pdf" "MarkItDown conversion failed"
   fi
 
   rm -f "$temp_md"
 done
 
-if [[ "$found_any" == false ]]; then
-  echo "$LOG_PREFIX No *_statement.pdf files found."
-fi
+# 2) Extract CSVs for ready Markdown statements.
+for md in "$STATEMENTS_DIR"/*_statement.md(N); do
+  base="${md:r}"
+  manifest="${base}.json"
+
+  if ! grep -Eq '^status:[[:space:]]*ready|^review_status:[[:space:]]*ready' "$md"; then
+    continue
+  fi
+
+  if [[ -f "$manifest" ]]; then
+    log "Skipping ready statement with existing manifest: ${manifest:t}"
+    continue
+  fi
+
+  log "Processing ready statement: ${md:t}"
+
+  # Institution-specific extractor routing.
+  if grep -Eiq '^institution:[[:space:]]*empower|Empower Monthly Report|provider_or_custodian:[[:space:]]*Pershing' "$md"; then
+    log "Detected Empower/Pershing statement"
+
+    if [[ -x "$REPO_DIR/scripts/extract_empower_statement.py" ]]; then
+      "$PYTHON_BIN" "$REPO_DIR/scripts/extract_empower_statement.py" "$md"
+    elif [[ -x "$REPO_DIR/scripts/empower_statement_extractor.py" ]]; then
+      "$PYTHON_BIN" "$REPO_DIR/scripts/empower_statement_extractor.py" "$md"
+    else
+      fail_file "$md" "No Empower extractor found"
+      continue
+    fi
+  else
+    fail_file "$md" "No extractor route for this statement type"
+    continue
+  fi
+
+  # 3) Validate CSVs if validator exists.
+  if [[ -x "$REPO_DIR/scripts/validate_statement_csvs.py" ]]; then
+    log "Validating CSVs for: ${md:t}"
+    "$PYTHON_BIN" "$REPO_DIR/scripts/validate_statement_csvs.py" "$md"
+  else
+    log "No validate_statement_csvs.py found; skipping CSV validation"
+  fi
+
+  # 4) Create compact manifest JSON.
+  if [[ -f "$REPO_DIR/scripts/create_statement_manifest.py" ]]; then
+    log "Creating manifest for: ${md:t}"
+    "$PYTHON_BIN" "$REPO_DIR/scripts/create_statement_manifest.py" "$md" --institution empower
+  else
+    fail_file "$md" "create_statement_manifest.py not found"
+    continue
+  fi
+
+  log "Completed pipeline for: ${md:t}"
+done
