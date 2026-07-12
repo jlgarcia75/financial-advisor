@@ -80,6 +80,24 @@ def account_key(row: dict[str, str]) -> str:
     return normalize_text(first_value(row, ACCOUNT_ID_FIELDS) or first_value(row, ACCOUNT_NAME_FIELDS))
 
 
+def infer_tax_treatment(account_type: str) -> str:
+    """Coarse tax treatment from an account type, for accounts without a note.
+    Account notes always take precedence over this."""
+    t = normalize_text(account_type)
+    if not t:
+        return ""
+    if "roth" in t or "hsa" in t or "health savings" in t:
+        return "tax_free"
+    if any(k in t for k in ("401", "403", "457", "pension", "retirement", "ira", "sep", "simple")):
+        return "tax_deferred"
+    if any(k in t for k in ("credit", "card", "loan", "mortgage", "liabilit")):
+        return "liability"
+    if any(k in t for k in ("checking", "saving", "brokerage", "individual", "trust",
+                            "cash", "money market", "taxable", "tod", "stock", "investment")):
+        return "taxable"
+    return ""
+
+
 def build_networth(manual_accounts, linked_accounts, recon, notes):
     """One row per account with dedup + include rules applied."""
     snapshot = []
@@ -89,6 +107,9 @@ def build_networth(manual_accounts, linked_accounts, recon, notes):
             note = notes.get(normalize_text(first_value(row, ACCOUNT_ID_FIELDS)), {})
             status = recon.get(key, "") if source == "manual_statement" else ""
             value = parse_number(first_value(row, ACCOUNT_VALUE_FIELDS))
+            account_type = first_value(row, ACCOUNT_TYPE_FIELDS) or note.get("account_type", "")
+            # Notes win; otherwise infer treatment from the account type.
+            tax_treatment = note.get("tax_treatment") or infer_tax_treatment(account_type)
 
             excluded_reason = ""
             if source == "manual_statement" and status in DUPLICATE_STATUSES:
@@ -100,8 +121,8 @@ def build_networth(manual_accounts, linked_accounts, recon, notes):
                 "account_id": first_value(row, ACCOUNT_ID_FIELDS),
                 "account_name": first_value(row, ACCOUNT_NAME_FIELDS),
                 "institution": first_value(row, INSTITUTION_FIELDS),
-                "account_type": first_value(row, ACCOUNT_TYPE_FIELDS) or note.get("account_type", ""),
-                "tax_treatment": note.get("tax_treatment", ""),
+                "account_type": account_type,
+                "tax_treatment": tax_treatment,
                 "owner": note.get("owner", ""),
                 "source": source,
                 "as_of": recency_key(row),
