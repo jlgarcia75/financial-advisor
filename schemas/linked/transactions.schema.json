@@ -1,0 +1,59 @@
+{
+  "fields": [
+    {
+      "name": "transaction_id",
+      "type": "string"
+    },
+    {
+      "name": "account_id",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "account_name",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "institution",
+      "type": "string"
+    },
+    {
+      "name": "date",
+      "type": "date",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "description",
+      "type": "string"
+    },
+    {
+      "name": "merchant_name",
+      "type": "string"
+    },
+    {
+      "name": "amount",
+      "type": "number",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "category",
+      "type": "string"
+    },
+    {
+      "name": "source",
+      "type": "string"
+    }
+  ],
+  "missingValues": [
+    ""
+  ]
+}

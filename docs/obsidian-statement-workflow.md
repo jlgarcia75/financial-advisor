@@ -28,13 +28,13 @@ Do not commit private financial statements, converted statement Markdown, normal
 Obsidian vault:
 
 ```text
-~/Documents/Obsidian/second-brain
+~/second-brain
 ```
 
 Finance area inside the vault:
 
 ```text
-~//Documents/Obsidian/second-brain/91_finance
+~/second-brain/91_finance
 ```
 
 Recommended two-level structure:
@@ -79,7 +79,14 @@ financial-advisor/
 ├── docs/
 │   └── obsidian-statement-workflow.md
 ├── schemas/
-│   └── financial-statement.schema.json
+│   ├── empower/
+│   │   ├── statement-manifest.schema.json
+│   │   ├── accounts.schema.json
+│   │   ├── holdings.schema.json
+│   │   ├── transactions.schema.json
+│   │   └── activity.schema.json
+│   └── <institution-or-statement-type>/
+│       └── ...
 ├── .gitignore
 └── README.md
 ```
@@ -603,8 +610,11 @@ second-brain/91_finance/Statements/
 could produce private local normalized files such as:
 
 ```text
-2026-06_chase-sapphire-1234_statement.transactions.csv
-2026-06_chase-sapphire-1234_statement.summary.json
+2026-06_chase-sapphire-1234_statement_manifest.json
+2026-06_chase-sapphire-1234_statement_accounts.csv
+2026-06_chase-sapphire-1234_statement_holdings.csv
+2026-06_chase-sapphire-1234_statement_transactions.csv
+2026-06_chase-sapphire-1234_statement_activity.csv
 ```
 
 Keep these files out of Git unless they are synthetic samples.
@@ -649,7 +659,192 @@ source_confidence
 raw_text
 ```
 
-## 16. Security Recommendations
+## 16. Adding New Statement Types and Accounts
+
+Use a repeatable onboarding process whenever you add a new institution, account, or statement format. The goal is to keep Obsidian as the audit layer, CSV as the normalized calculation layer, and the GitHub repo as the versioned automation layer.
+
+### 16.1 Statement Type Registry
+
+Create a lightweight registry in the repo:
+
+```text
+financial-advisor/config/statement_types.yml
+```
+
+Example:
+
+```yaml
+statement_types:
+  empower_multi_account_brokerage:
+    institution: empower
+    statement_kind: multi_account_brokerage
+    filename_pattern: "YYYY-MM_empower-*-*_statement.pdf"
+    extractor: scripts/extractors/empower_multi_account.py
+    schemas:
+      manifest: schemas/empower/statement-manifest.schema.json
+      accounts: schemas/empower/accounts.schema.json
+      holdings: schemas/empower/holdings.schema.json
+      transactions: schemas/empower/transactions.schema.json
+      activity: schemas/empower/activity.schema.json
+    outputs:
+      - accounts
+      - holdings
+      - transactions
+      - activity
+
+  generic_credit_card:
+    statement_kind: credit_card
+    extractor: scripts/extractors/generic_credit_card.py
+    schemas:
+      manifest: schemas/credit_card/statement-manifest.schema.json
+      transactions: schemas/credit_card/transactions.schema.json
+      activity: schemas/credit_card/activity.schema.json
+    outputs:
+      - transactions
+      - activity
+```
+
+This registry lets automation determine which extractor and schemas to use based on the statement metadata and filename.
+
+### 16.2 Standard Onboarding Checklist
+
+For each new statement type, follow this checklist:
+
+```text
+1. Save the original PDF in 91_finance/Statements.
+2. Convert it to Markdown with MarkItDown.
+3. Inspect the Markdown and identify the document sections and tables.
+4. Decide what data is relevant for advisor calculations.
+5. Create or update an extractor under scripts/extractors/.
+6. Generate sample CSVs from one real reviewed statement.
+7. Infer draft schemas from the sample CSVs.
+8. Manually tighten schemas and commit them.
+9. Validate the generated CSVs against the schemas.
+10. Add or update an Account note in 91_finance/Accounts.
+11. Mark the statement Markdown as status: ready only after review.
+```
+
+Do not regenerate committed schemas every month. Generate schemas once from a high-quality sample, then maintain them by hand.
+
+### 16.3 Choosing the Right Normalized Outputs
+
+Different statement types need different CSV outputs.
+
+| Statement type | Recommended CSVs | Notes |
+|---|---|---|
+| Checking or savings | `transactions.csv`, `activity.csv` | Focus on cash movement, deposits, withdrawals, fees, and balances. |
+| Credit card | `transactions.csv`, `activity.csv` | Include statement balance, minimum payment, due date, APR if available, and transaction rows. |
+| Single-account brokerage | `holdings.csv`, `transactions.csv`, `activity.csv` | Include symbol, quantity, price, market value, cost basis, income, buys, sells, fees. |
+| Multi-account brokerage | `accounts.csv`, `holdings.csv`, `transactions.csv`, `activity.csv` | Every row must include `account_id` and `account_name`. |
+| Mortgage or loan | `liabilities.csv`, `activity.csv` | Track principal, interest rate, payment due date, escrow, fees, and payoff fields. |
+| Retirement or HSA | `holdings.csv`, `transactions.csv`, `activity.csv` | Treat like brokerage, but preserve tax/account type metadata. |
+
+For complex brokerage statements, keep the PDF and Markdown as one statement package, but normalize data by sub-account. Never allow holdings or transactions to exist without an `account_id` when a statement contains multiple accounts.
+
+### 16.4 Per-Account Notes for New Accounts
+
+When adding a new account, create or update a note in:
+
+```text
+second-brain/91_finance/Accounts/
+```
+
+Example:
+
+```markdown
+---
+type: financial_account
+account_id: empower-bda631373
+institution: empower
+account_name: Jesus Garcia ROTH IRA
+account_last4: "1234"
+account_type: ira_roth
+data_source: manual_statement
+statement_type: empower_multi_account_brokerage
+status: active
+---
+
+# Jesus Garcia ROTH IRA
+
+This account appears inside the Empower multi-account brokerage statement.
+
+## Advisor Context
+
+Use holdings for portfolio allocation and retirement-account tracking.
+Do not mix this account with household-level totals unless the analysis asks for consolidated household view.
+```
+
+Account notes are interpretation metadata. They should not duplicate every transaction or holding.
+
+### 16.5 Manifest JSON
+
+Each statement package may have one small manifest JSON that points to the normalized CSVs. Do not create JSON duplicates of every CSV unless a downstream system requires it.
+
+Example:
+
+```json
+{
+  "schema_version": "1.0",
+  "statement_id": "2025-12_empower-garciatrust-1234_statement",
+  "institution": "empower",
+  "statement_type": "empower_multi_account_brokerage",
+  "as_of_date": "2025-12-31",
+  "source": {
+    "pdf": "2025-12_empower-garciatrust-1234_statement.pdf",
+    "markdown": "2025-12_empower-garciatrust-1234_statement.md"
+  },
+  "datasets": {
+    "accounts": "2025-12_empower-garciatrust-1234_statement_accounts.csv",
+    "holdings": "2025-12_empower-garciatrust-1234_statement_holdings.csv",
+    "transactions": "2025-12_empower-garciatrust-1234_statement_transactions.csv",
+    "activity": "2025-12_empower-garciatrust-1234_statement_activity.csv"
+  },
+  "review_status": "ready"
+}
+```
+
+### 16.6 Extractor Design Pattern
+
+Each extractor should be deterministic and section-aware. It should not depend on an LLM for routine monthly processing once the statement type is supported.
+
+Recommended extractor interface:
+
+```bash
+python3 scripts/extractors/empower_multi_account.py \
+  --md ~/second-brain/91_finance/Statements/2025-12_empower-garciatrust-1234_statement.md \
+  --out ~/second-brain/91_finance/Statements
+```
+
+Recommended behavior:
+
+```text
+- Read Markdown frontmatter.
+- Identify section headings and table blocks.
+- Extract only relevant sections.
+- Preserve statement_id, institution, period, as_of_date, account_id, account_name, and source_file on every row.
+- Write normalized CSVs.
+- Write a manifest JSON.
+- Validate generated files against the relevant schemas.
+- Fail loudly if required fields are missing.
+```
+
+### 16.7 Monthly Processing After a Statement Type Exists
+
+Once a statement type has a working extractor and schemas, the monthly workflow is short:
+
+```text
+1. Save the PDF using the standard filename.
+2. Let MarkItDown create the Markdown.
+3. Review the Markdown and set status: ready.
+4. Run the matching extractor.
+5. Validate CSVs and manifest.
+6. Use the CSVs for calculations and reconciliation.
+7. Save advisor output in Reviews.
+```
+
+The only time you need to revisit schemas or extractor logic is when the institution changes the statement format or you add a materially different account type.
+
+## 17. Security Recommendations
 
 - Do not paste bank credentials, MFA codes, full account numbers, or full SSNs into ChatGPT.
 - Do not store financial institution passwords in repo scripts.
@@ -661,7 +856,7 @@ raw_text
 - Keep provenance fields on every normalized record.
 - Avoid using untrusted PDFs in automated conversion pipelines.
 
-## 17. End-to-End Workflow
+## 18. End-to-End Workflow
 
 ```text
 1. Develop automation in VS Code
@@ -679,7 +874,7 @@ raw_text
 13. Advisor output is saved to ~/second-brain/91_finance/Reviews
 ```
 
-## 18. Recommended Next Automations
+## 19. Recommended Next Automations
 
 Build these incrementally:
 
@@ -753,7 +948,7 @@ Examples:
 2026-07_debt-review.md
 ```
 
-## 19. Recommended Final State
+## 20. Recommended Final State
 
 ```text
 second-brain/
@@ -786,7 +981,14 @@ financial-advisor/
 ├── docs/
 │   └── obsidian-statement-workflow.md
 ├── schemas/
-│   └── financial-statement.schema.json
+│   ├── empower/
+│   │   ├── statement-manifest.schema.json
+│   │   ├── accounts.schema.json
+│   │   ├── holdings.schema.json
+│   │   ├── transactions.schema.json
+│   │   └── activity.schema.json
+│   └── <institution-or-statement-type>/
+│       └── ...
 ├── .gitignore
 └── README.md
 ```

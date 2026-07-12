@@ -95,8 +95,6 @@ for md in "$STATEMENTS_DIR"/*_statement.md(N); do
 
     if [[ -x "$REPO_DIR/scripts/extract_empower_statement.py" ]]; then
       "$PYTHON_BIN" "$REPO_DIR/scripts/extract_empower_statement.py" "$md"
-    elif [[ -x "$REPO_DIR/scripts/empower_statement_extractor.py" ]]; then
-      "$PYTHON_BIN" "$REPO_DIR/scripts/empower_statement_extractor.py" "$md"
     else
       fail_file "$md" "No Empower extractor found"
       continue
@@ -124,8 +122,13 @@ for md in "$STATEMENTS_DIR"/*_statement.md(N); do
     fail_file "$md" "create_statement_manifest.py not found"
     continue
   fi
-  
-  if [[ "$advisor_inputs_dirty" == true ]]; then
+
+  log "Completed pipeline for: ${md:t}"
+done
+
+# Rebuild consolidated advisor inputs once, after all new statements are processed
+# (not per-statement), then gate on data quality.
+if [[ "$advisor_inputs_dirty" == true ]]; then
   log "Rebuilding consolidated advisor inputs"
 
   if "$PYTHON_BIN" "$REPO_DIR/scripts/build_advisor_inputs.py"; then
@@ -134,10 +137,17 @@ for md in "$STATEMENTS_DIR"/*_statement.md(N); do
     log "FAILED: Advisor input rebuild failed" >&2
     exit 1
   fi
-  else
-    log "Advisor inputs unchanged; rebuild not required"
+
+  # Gate: run data-quality checks after rebuilding masters. Warnings are logged;
+  # hard errors are logged but do not abort (the report captures the detail).
+  if [[ -f "$REPO_DIR/scripts/check_finance_data_quality.py" ]]; then
+    log "Running data-quality checks"
+    if "$PYTHON_BIN" "$REPO_DIR/scripts/check_finance_data_quality.py"; then
+      log "Data-quality checks passed"
+    else
+      log "WARNING: Data-quality checks reported errors; see Reviews/data_quality_report.md" >&2
+    fi
   fi
-
-
-  log "Completed pipeline for: ${md:t}"
-done
+else
+  log "Advisor inputs unchanged; rebuild not required"
+fi

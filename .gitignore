@@ -8,5 +8,10 @@
 *_statement.md
 *_statement.json
 logs/
+__pycache__/
+*.pyc
+.DS_Store
+scripts/*.plist
 !README.md
 !docs/**/*.md
+!config/*.example.env

@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "account-note.schema.json",
+  "title": "Account Note Frontmatter",
+  "description": "Validation contract for the YAML frontmatter of one note per account in 91_finance/Accounts/. Interpretation metadata only — never per-transaction data.",
+  "type": "object",
+  "required": [
+    "type",
+    "account_id",
+    "institution",
+    "account_name",
+    "account_type",
+    "source_priority",
+    "status"
+  ],
+  "properties": {
+    "type": {
+      "const": "financial_account"
+    },
+    "account_id": {
+      "type": "string",
+      "description": "Stable identifier; should match account_id used in the CSVs."
+    },
+    "institution": {
+      "type": "string"
+    },
+    "provider_or_custodian": {
+      "type": "string"
+    },
+    "account_name": {
+      "type": "string"
+    },
+    "account_last4": {
+      "type": "string",
+      "pattern": "^[0-9]{0,4}$"
+    },
+    "account_type": {
+      "type": "string",
+      "description": "e.g. checking, savings, credit_card, brokerage, roth_ira, rollover_ira, trust, mortgage, hsa."
+    },
+    "tax_treatment": {
+      "type": "string",
+      "enum": [
+        "taxable",
+        "tax_deferred",
+        "tax_free",
+        "liability",
+        "not_applicable"
+      ],
+      "description": "Drives tax-aware advice. roth=tax_free, traditional/rollover=tax_deferred, brokerage=taxable."
+    },
+    "source_priority": {
+      "type": "string",
+      "enum": [
+        "manual_statement",
+        "linked"
+      ],
+      "description": "Which source wins for this account when manual and linked both have it. Empower/Pershing accounts use manual_statement; everything else linked."
+    },
+    "include_in_networth": {
+      "type": "boolean",
+      "default": true,
+      "description": "Set false to exclude from net-worth/allocation rollups (e.g. an account tracked for reference only)."
+    },
+    "owner": {
+      "type": "string",
+      "description": "Household role / owner, e.g. Jesus, LeAndra, joint, trust."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "closed",
+        "archived"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

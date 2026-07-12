@@ -1,0 +1,48 @@
+{
+  "fields": [
+    {
+      "name": "account_id",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "account_name",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "institution",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "account_type",
+      "type": "string"
+    },
+    {
+      "name": "account_last4",
+      "type": "string"
+    },
+    {
+      "name": "current_value",
+      "type": "number"
+    },
+    {
+      "name": "as_of_date",
+      "type": "date"
+    },
+    {
+      "name": "source",
+      "type": "string"
+    }
+  ],
+  "missingValues": [
+    ""
+  ]
+}

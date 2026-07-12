@@ -33,9 +33,9 @@ import csv
 import json
 import re
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 DATE_RE = re.compile(r"\b\d{2}/\d{2}/\d{4}\b")
 MONEY_RE = re.compile(r"\(?\$?\s*[-+]?\d[\d,]*\.\d{2}\s*\)?")
@@ -182,55 +182,6 @@ def extract_statement_metadata(
         "as_of_date": parse_date_mmddyyyy(as_of_date),
         "review_status": fm.get("status"),
     }
-
-
-def extract_household_snapshot(text: str) -> dict[str, Any]:
-    """Extract page-1 household snapshot values.
-
-    MarkItDown sometimes places these values in table cells and sometimes as
-    plain text, so this function first searches table cells and then falls back
-    to plain regexes.
-    """
-    label_to_key = {
-        "Total Value This Period": "total_value_this_period",
-        "Total Value Last Period": "total_value_last_period",
-        "Change Since Last Statement": "change_since_last_statement",
-        "Year to Date Return1": "year_to_date_return_pct",
-        "Since Inception Return1": "since_inception_return_pct",
-        "S&P 500 Index Year to Date Return2": "sp500_ytd_return_pct",
-        "FTSE All World ex-US Net Index Year to Date Return2": "ftse_all_world_ex_us_ytd_return_pct",
-        "Barclays Capital Bond Index Year to Date Return2": "barclays_capital_bond_ytd_return_pct",
-    }
-
-    out: dict[str, Any] = {}
-
-    for line in text.splitlines()[:90]:
-        cells = markdown_cells(line)
-        if not cells:
-            continue
-        for i, cell in enumerate(cells):
-            label = cell.strip()
-            if label in label_to_key:
-                for nxt in cells[i + 1 :]:
-                    val = parse_number(nxt)
-                    if val is not None:
-                        out[label_to_key[label]] = val
-                        break
-
-    # Plain-text fallbacks.
-    fallback_patterns = {
-        "total_value_this_period": r"Total Value This Period\s+\$?([\d,]+\.\d{2})",
-        "total_value_last_period": r"Total Value Last Period\s+\$?([\d,]+\.\d{2})",
-        "change_since_last_statement": r"Change Since Last Statement\s+\$?([\d,]+\.\d{2})",
-        "year_to_date_return_pct": r"Year to Date Return1\s+([\d,]+\.\d{2})\s*%",
-        "since_inception_return_pct": r"Since Inception Return1\s+([\d,]+\.\d{2})\s*%",
-    }
-    for key, pat in fallback_patterns.items():
-        if key not in out:
-            m = re.search(pat, text[:4000], flags=re.I)
-            if m:
-                out[key] = parse_number(m.group(1))
-    return out
 
 
 def extract_activity_rows(text: str, statement_id: str) -> list[dict[str, Any]]:
@@ -545,6 +496,7 @@ def extract_holdings(
             current_account_name = m.group(2).strip()
             current_account_type = None
             current_asset_class = None
+            assert current_account_id is not None
             account_summaries.setdefault(
                 current_account_id,
                 {
@@ -639,63 +591,6 @@ def extract_holdings(
     return list(dedup.values()), list(account_summaries.values())
 
 
-def summarize_sections(text: str) -> list[dict[str, Any]]:
-    """Return a human-readable section map based on headings and known report structure."""
-    sections = [
-        {
-            "section": "Empower Monthly Report / Household Snapshot",
-            "pages": "1",
-            "purpose": "Top-level household value, period-over-period change, benchmark returns, table of contents.",
-            "use_for_advisor": "Household net-worth snapshot and statement metadata.",
-            "extract": True,
-        },
-        {
-            "section": "Household Summary",
-            "pages": "2",
-            "purpose": "Activity at a Glance, asset allocation, and household breakdown.",
-            "use_for_advisor": "Performance, contributions/withdrawals, income, expenses, and allocation summary.",
-            "extract": True,
-        },
-        {
-            "section": "Portfolio Summary",
-            "pages": "3, 21",
-            "purpose": "Portfolio-level activity, performance, and allocation. Garcia #2 is empty in this file.",
-            "use_for_advisor": "Portfolio totals and data quality checks.",
-            "extract": True,
-        },
-        {
-            "section": "Transactions",
-            "pages": "4-10, 22",
-            "purpose": "Transaction Summary and Transaction Detail by subtype.",
-            "subsections": [
-                "Cash Dividends",
-                "Miscellaneous Income",
-                "Miscellaneous Expenses",
-                "Buys",
-                "Sells",
-            ],
-            "use_for_advisor": "Income, fees, buys, sells, realized activity, cash-flow classification.",
-            "extract": True,
-        },
-        {
-            "section": "Account Holdings",
-            "pages": "11-20",
-            "purpose": "Security holdings by account and asset class.",
-            "subsections": ["Cash and Cash Equivalents", "Equity", "Fixed Income"],
-            "use_for_advisor": "Portfolio allocation, positions, account totals, concentration analysis.",
-            "extract": True,
-        },
-        {
-            "section": "Disclosures",
-            "pages": "23",
-            "purpose": "Legal/explanatory text and source-document warnings.",
-            "use_for_advisor": "Do not import as financial records; retain as audit context only.",
-            "extract": False,
-        },
-    ]
-    return sections
-
-
 def write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> None:
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
@@ -721,31 +616,6 @@ def main() -> int:
     holdings, accounts = extract_holdings(text, statement_id)
     transactions = extract_transactions(text, statement_id)
     activity = extract_activity_rows(text, statement_id)
-
-    statement = {
-        **metadata,
-        "account_type_detected": "brokerage",
-        "sections": summarize_sections(text),
-        "household_snapshot": extract_household_snapshot(text),
-        "accounts": accounts,
-        "holdings": [asdict(h) for h in holdings],
-        "transactions": [asdict(t) for t in transactions],
-        "activity": activity,
-        "extraction": {
-            "tool": "extract_empower_statement.py",
-            "extracted_at": datetime.now(timezone.utc)
-            .replace(microsecond=0)
-            .isoformat()
-            + "Z",
-            "source_format": "markitdown_md",
-            "quality_flags": [
-                "Empower statement has holdings and transaction tables split across pages.",
-                "Cost basis, tax lots, date acquired, and realized gain/loss are not present in the visible Account Holdings tables and are emitted as null.",
-                "Price paid is available for buy/sell transaction rows as transaction price, not as position cost basis.",
-                "Use the custodian statement/1099 for tax-lot and tax reporting.",
-            ],
-        },
-    }
 
     base = out_dir / statement_id
 

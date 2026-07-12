@@ -1,0 +1,57 @@
+{
+  "fields": [
+    {
+      "name": "account_id",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "account_name",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "institution",
+      "type": "string"
+    },
+    {
+      "name": "account_last4",
+      "type": "string"
+    },
+    {
+      "name": "symbol",
+      "type": "string"
+    },
+    {
+      "name": "security_name",
+      "type": "string"
+    },
+    {
+      "name": "quantity",
+      "type": "number"
+    },
+    {
+      "name": "current_price",
+      "type": "number"
+    },
+    {
+      "name": "market_value",
+      "type": "number"
+    },
+    {
+      "name": "as_of_date",
+      "type": "date"
+    },
+    {
+      "name": "source",
+      "type": "string"
+    }
+  ],
+  "missingValues": [
+    ""
+  ]
+}
