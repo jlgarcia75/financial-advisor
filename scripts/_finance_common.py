@@ -190,3 +190,42 @@ def parse_frontmatter(md_text_or_path: str | Path) -> dict[str, str]:
             key, value = line.split(":", 1)
             data[key.strip()] = value.strip().strip('"').strip("'")
     return data
+
+
+_PLACEHOLDER = {"", "unknown", "none"}
+
+
+def update_frontmatter(md_path: Path, updates: dict[str, Any], only_if_missing: bool = True) -> bool:
+    """Add/replace scalar keys in a Markdown file's frontmatter, preserving the
+    body byte-for-byte. With only_if_missing, an existing real value is kept and
+    only missing keys or 'unknown'/empty placeholders are filled. Returns True if
+    the file was changed. No frontmatter block -> no-op (returns False)."""
+    text = md_path.read_text(encoding="utf-8")
+    match = _FRONTMATTER_RE.search(text)
+    if not match:
+        return False
+
+    lines = match.group(1).splitlines()
+    index = {}
+    for i, line in enumerate(lines):
+        if ":" in line:
+            index[line.split(":", 1)[0].strip()] = i
+
+    changed = False
+    for key, value in updates.items():
+        if value is None or str(value).strip() == "":
+            continue
+        if key in index:
+            current = lines[index[key]].split(":", 1)[1].strip().strip('"').strip("'")
+            if only_if_missing and current.lower() not in _PLACEHOLDER:
+                continue
+            lines[index[key]] = f'{key}: "{value}"'
+        else:
+            lines.append(f'{key}: "{value}"')
+        changed = True
+
+    if not changed:
+        return False
+    new_text = text[: match.start(1)] + "\n".join(lines) + text[match.end(1):]
+    md_path.write_text(new_text, encoding="utf-8")
+    return True

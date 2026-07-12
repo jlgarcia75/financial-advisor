@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _finance_common import parse_date, parse_frontmatter  # noqa: E402
+from _finance_common import parse_date, parse_frontmatter, update_frontmatter  # noqa: E402
 
 DEFAULT_STATEMENTS_DIR = Path(
     "/Users/jesusgarcia/ObsidianVaults/second-brain/91_finance/Statements"
@@ -113,6 +113,19 @@ def create_manifest(md_path: Path, args) -> None:
     out.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote {out}")
 
+    # Backfill the resolved metadata into the MD frontmatter so it is visible in
+    # Obsidian and future runs don't have to re-derive it. Only fills missing or
+    # 'unknown' fields; never clobbers values you set (e.g. status).
+    if not args.no_stamp:
+        stamped = update_frontmatter(md_path, {
+            "institution": manifest.get("institution"),
+            "statement_type": manifest.get("statement_type"),
+            "as_of_date": manifest.get("as_of_date"),
+            "run_date": manifest.get("run_date"),
+        })
+        if stamped:
+            print(f"Stamped metadata into {md_path.name}")
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -125,6 +138,8 @@ def main():
     parser.add_argument("--institution", default=None)
     parser.add_argument("--statement-type", default="multi_account_brokerage")
     parser.add_argument("--schema-version", default="1.0")
+    parser.add_argument("--no-stamp", action="store_true",
+                        help="Do not backfill resolved metadata into the MD frontmatter.")
 
     args = parser.parse_args()
 
