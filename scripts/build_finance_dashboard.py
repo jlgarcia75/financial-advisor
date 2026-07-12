@@ -102,6 +102,7 @@ def build_networth(manual_accounts, linked_accounts, recon, notes):
                 "institution": first_value(row, INSTITUTION_FIELDS),
                 "account_type": first_value(row, ACCOUNT_TYPE_FIELDS) or note.get("account_type", ""),
                 "tax_treatment": note.get("tax_treatment", ""),
+                "owner": note.get("owner", ""),
                 "source": source,
                 "as_of": recency_key(row),
                 "current_value": value,
@@ -110,6 +111,25 @@ def build_networth(manual_accounts, linked_accounts, recon, notes):
                 "excluded_reason": excluded_reason,
             })
     return snapshot
+
+
+def build_networth_breakdown(snapshot, dimension, unlabeled="unspecified"):
+    """Sum included net worth by a snapshot dimension (e.g. tax_treatment, owner),
+    returning rows sorted high-to-low with a percent of total."""
+    included = [r for r in snapshot if r["included_in_networth"]]
+    total = sum(r["current_value"] or 0.0 for r in included)
+    buckets: dict[str, float] = {}
+    for r in included:
+        buckets[r.get(dimension) or unlabeled] = buckets.get(r.get(dimension) or unlabeled, 0.0) + (r["current_value"] or 0.0)
+    return [
+        {
+            "dimension": dimension,
+            "key": key,
+            "value": round(value, 2),
+            "percent_of_networth": round(value / total * 100, 2) if total else 0.0,
+        }
+        for key, value in sorted(buckets.items(), key=lambda kv: -kv[1])
+    ]
 
 
 def build_allocation(manual_holdings, linked_holdings, recon, notes):
@@ -198,7 +218,16 @@ def fmt_money(value) -> str:
     return f"${value:,.2f}" if isinstance(value, (int, float)) else "—"
 
 
-def write_dashboard_md(path, period, snapshot, net_worth, allocation, alloc_total, cash_flow):
+def _breakdown_lines(title, label, rows):
+    """Render a net-worth breakdown as a Markdown section (value + % columns)."""
+    lines = ["", f"## {title}", "", f"| {label} | Value | % |", "| --- | --- | --- |"]
+    for r in rows:
+        lines.append(f"| {r['key'] or '—'} | {fmt_money(r['value'])} | {r['percent_of_networth']}% |")
+    return lines
+
+
+def write_dashboard_md(path, period, snapshot, net_worth, allocation, alloc_total,
+                       cash_flow, by_tax, by_owner):
     included = [r for r in snapshot if r["included_in_networth"]]
     excluded = [r for r in snapshot if not r["included_in_networth"]]
     asset_rows = [r for r in allocation if r["dimension"] == "asset_class"]
@@ -228,6 +257,11 @@ def write_dashboard_md(path, period, snapshot, net_worth, allocation, alloc_tota
         for r in excluded:
             lines.append(f"| {r['account_name']} | {r['source']} | {r['excluded_reason']} |")
 
+    if by_tax:
+        lines += _breakdown_lines("Net worth by tax treatment", "Tax treatment", by_tax)
+    if by_owner:
+        lines += _breakdown_lines("Net worth by owner", "Owner", by_owner)
+
     lines += ["", "## Allocation by asset class", "",
               "| Asset class | Market value | % |", "| --- | --- | --- |"]
     for r in asset_rows:
@@ -245,8 +279,8 @@ def write_dashboard_md(path, period, snapshot, net_worth, allocation, alloc_tota
 
     lines += ["", "---", "",
               "_Source: `Reviews/inputs/advisor_inputs_manifest.json`. See "
-              "`NET_WORTH_snapshot.csv`, `allocation_summary.csv`, `cash_flow_summary.csv` "
-              "for the underlying rows._", ""]
+              "`NET_WORTH_snapshot.csv`, `networth_breakdown.csv`, `allocation_summary.csv`, "
+              "`cash_flow_summary.csv` for the underlying rows._", ""]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -283,17 +317,21 @@ def main() -> int:
     net_worth = round(sum(r["current_value"] or 0.0 for r in snapshot if r["included_in_networth"]), 2)
     allocation, alloc_total = build_allocation(manual_holdings, linked_holdings, recon, notes)
     cash_flow = build_cash_flow(manual_tx, linked_tx, recon, notes)
+    by_tax = build_networth_breakdown(snapshot, "tax_treatment")
+    by_owner = build_networth_breakdown(snapshot, "owner")
 
     period = args.period or (manifest.get("periods_covered") or [""])[-1] or \
         datetime.now(timezone.utc).strftime("%Y-%m")
 
     write_csv(args.reviews_dir / "NET_WORTH_snapshot.csv", snapshot,
               preferred=["account_id", "account_name", "institution", "account_type",
-                         "tax_treatment", "source", "as_of", "current_value", "included_in_networth"])
+                         "tax_treatment", "owner", "source", "as_of", "current_value", "included_in_networth"])
     write_csv(args.reviews_dir / "allocation_summary.csv", allocation)
     write_csv(args.reviews_dir / "cash_flow_summary.csv", cash_flow)
+    write_csv(args.reviews_dir / "networth_breakdown.csv", by_tax + by_owner,
+              preferred=["dimension", "key", "value", "percent_of_networth"])
     write_dashboard_md(args.reviews_dir / f"{period}_dashboard.md", period,
-                       snapshot, net_worth, allocation, alloc_total, cash_flow)
+                       snapshot, net_worth, allocation, alloc_total, cash_flow, by_tax, by_owner)
 
     print(f"Net worth: {fmt_money(net_worth)} ({sum(1 for r in snapshot if r['included_in_networth'])} accounts)")
     print(f"Wrote dashboard artifacts to {args.reviews_dir}")
