@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tax-profile.schema.json",
+  "title": "Household Tax Profile Frontmatter",
+  "description": "Validation contract for the YAML frontmatter of the household tax profile note (91_finance/tax_profile.md). Supplies the tax inputs the pipeline cannot derive.",
+  "type": "object",
+  "required": ["type", "tax_year", "filing_status", "state"],
+  "properties": {
+    "type": {"const": "tax_profile"},
+    "tax_year": {"type": "integer", "minimum": 2000, "maximum": 2100},
+    "filing_status": {
+      "type": "string",
+      "enum": [
+        "single",
+        "married_filing_jointly",
+        "married_filing_separately",
+        "head_of_household",
+        "qualifying_surviving_spouse"
+      ]
+    },
+    "state": {"type": "string"},
+    "dependents": {"type": "integer", "minimum": 0},
+    "taxpayers": {"type": "string", "description": "e.g. 'Jesus, LeAndra'"},
+    "entities": {"type": "string", "description": "Returns in scope, e.g. 'Personal (MFJ); The Garcia Family Trust'"},
+    "est_agi": {"type": ["number", "string"]},
+    "marginal_bracket": {"type": "string"},
+    "effective_bracket": {"type": "string"},
+    "ytd_wages": {"type": ["number", "string"]},
+    "ytd_withholding": {"type": ["number", "string"]},
+    "estimated_payments_made": {"type": ["number", "string"]},
+    "prior_year_agi": {"type": ["number", "string"]},
+    "capital_loss_carryover": {"type": ["number", "string"]},
+    "charitable_carryover": {"type": ["number", "string"]},
+    "std_deduction": {"type": ["number", "string"]},
+    "contribution_limit_401k": {"type": ["number", "string"]},
+    "contribution_limit_ira": {"type": ["number", "string"]},
+    "contribution_limit_hsa": {"type": ["number", "string"]},
+    "ltcg_thresholds": {"type": "string"}
+  },
+  "additionalProperties": true
+}

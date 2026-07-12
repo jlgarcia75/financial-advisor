@@ -186,6 +186,21 @@ def main() -> int:
               "ingest regenerated manual_linked_reconciliation.csv")
         check((reviews / "2025-12_dashboard.md").exists(), "ingest rebuilt the dashboard")
 
+        print("[7] create_tax_strategy_prompt (data-grounded tax prompt)")
+        tax_profile = root / "tax_profile.md"
+        tax_profile.write_text(
+            "---\ntype: tax_profile\ntax_year: 2025\nfiling_status: married_filing_jointly\n"
+            "state: CA\ntaxpayers: \"Alice\"\n---\n\n# profile\n"
+        )
+        run([SCRIPTS / "create_tax_strategy_prompt.py", "--inputs-dir", inputs,
+             "--reviews-dir", reviews, "--tax-profile", tax_profile])
+        tax_prompt = reviews / "2025_tax_strategy_prompt.md"
+        check(tax_prompt.exists(), "tax strategy prompt written")
+        text = tax_prompt.read_text()
+        check("tax-free $100.00" in text, "tax prompt embeds net worth by tax treatment [DATA]")
+        check("married_filing_jointly" in text, "tax prompt pulls filing status from profile")
+        check("NOT AVAILABLE" in text, "tax prompt flags missing cost basis instead of fabricating")
+
     print("\nSMOKE TEST PASSED")
     return 0
 
