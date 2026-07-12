@@ -158,6 +158,9 @@ def main() -> int:
             {"account_id": "LINK3", "account_name": "Outside Savings", "institution": "bank",
              "account_type": "savings", "account_last4": "8888", "current_value": 75.0,
              "as_of_date": "2025-12-28", "source": "linked"},
+            {"account_id": "LINK4", "account_name": "Employer 401k", "institution": "fidelity",
+             "account_type": "401k", "account_last4": "7777", "current_value": 200.0,
+             "as_of_date": "2025-12-28", "source": "linked"},
         ])
         run([SCRIPTS / "validate_statement_csvs.py", "--linked", linked / "linked_accounts.csv"])
         run([SCRIPTS / "reconcile_manual_vs_linked.py", "--manual-dir", inputs,
@@ -167,6 +170,7 @@ def main() -> int:
         check(recon.get("ACC1") == "probable_duplicate", f"ACC1 flagged probable_duplicate (got {recon.get('ACC1')})")
         check(recon.get("LINK2") == "linked_only", f"LINK2 flagged linked_only (got {recon.get('LINK2')})")
         check(recon.get("LINK3") == "linked_only", f"LINK3 flagged linked_only (got {recon.get('LINK3')})")
+        check(recon.get("LINK4") == "linked_only", f"LINK4 flagged linked_only (got {recon.get('LINK4')})")
 
         print("[4] create_monthly_review_prompt")
         run([SCRIPTS / "create_monthly_review_prompt.py", "--inputs-dir", inputs, "--reviews-dir", reviews])
@@ -200,6 +204,8 @@ def main() -> int:
         check("tax-free $100.00" in text, "tax prompt embeds net worth by tax treatment [DATA]")
         check("married_filing_jointly" in text, "tax prompt pulls filing status from profile")
         check("NOT AVAILABLE" in text, "tax prompt flags missing cost basis instead of fabricating")
+        check("tax-deferred $200.00" in text,
+              "note-less 401k inferred as tax_deferred (not left unspecified)")
 
     print("\nSMOKE TEST PASSED")
     return 0
