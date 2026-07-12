@@ -17,6 +17,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _finance_common import (  # noqa: E402
     first_value,
+    latest_per_account,
     normalize_text,
     parse_date,
     parse_number,
@@ -368,8 +369,11 @@ def main() -> int:
         for p in missing: print(f'Missing required input: {p}', file=sys.stderr)
         return 2
 
-    ma, mh, mt = read_csv(ma_path), read_csv(mh_path), read_csv(mt_path)
-    la, lh, lt = read_csv(la_path), read_csv(lh_path), read_csv(lt_path)
+    # Accounts and holdings are point-in-time — collapse multi-month masters to
+    # each account's latest statement so we match one row per account, not one
+    # per month. Transactions stay full (per-month) for transaction-level dedup.
+    ma, mh, mt = latest_per_account(read_csv(ma_path)), latest_per_account(read_csv(mh_path)), read_csv(mt_path)
+    la, lh, lt = latest_per_account(read_csv(la_path)), latest_per_account(read_csv(lh_path)), read_csv(lt_path)
     matches = match_accounts(ma, la)
     holdings = reconcile_holdings(mh, lh, matches, args.holding_value_tolerance, args.holding_quantity_tolerance)
     transactions = reconcile_transactions(mt, lt, matches, args.transaction_amount_tolerance, args.description_threshold)

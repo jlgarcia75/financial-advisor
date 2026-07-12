@@ -66,17 +66,28 @@ def write_csv(path: Path, rows: list[dict]) -> None:
 
 
 def find_ready_manifests(statements_dir: Path) -> list[Path]:
-    manifests = sorted(statements_dir.glob("*_statement.json"))
+    # Recursive so archived statements (moved under Statements/Archive/...) keep
+    # feeding the masters — archiving is organizational, not data loss.
+    manifests = sorted(statements_dir.rglob("*_statement.json"))
 
     ready = []
+    seen_ids: set[str] = set()
     for path in manifests:
         try:
             manifest = read_json(path)
         except Exception:
             continue
 
-        if manifest.get("review_status") == "ready":
-            ready.append(path)
+        if manifest.get("review_status") != "ready":
+            continue
+
+        # Guard against the same statement appearing both active and archived.
+        sid = manifest.get("statement_id", path.stem)
+        if sid in seen_ids:
+            print(f"Skipping duplicate statement_id {sid}: {path}")
+            continue
+        seen_ids.add(sid)
+        ready.append(path)
 
     return ready
 

@@ -115,6 +115,45 @@ def period_of(value: Any) -> str:
 
 
 # --------------------------------------------------------------------------- #
+# Point-in-time selection (multi-month masters)
+# --------------------------------------------------------------------------- #
+ACCOUNT_ID_FIELDS = ("account_id", "persistent_account_id", "id")
+ACCOUNT_NAME_FIELDS = ("account_name", "name", "official_name")
+
+
+def recency_key(row: dict[str, Any]) -> str:
+    """A sortable recency string for a row: prefer as_of_date, else the
+    YYYY-MM prefix of statement_id. Used to pick the newest statement per
+    account when masters hold several months."""
+    for field in ("as_of_date", "run_date"):
+        value = str(row.get(field, "")).strip()
+        if value:
+            return parse_date(value)
+    sid = str(row.get("statement_id", "")).strip()
+    m = re.match(r"(\d{4}-\d{2})", sid)
+    return m.group(1) if m else ""
+
+
+def account_identity(row: dict[str, Any]) -> str:
+    return first_value(row, ACCOUNT_ID_FIELDS) or normalize_text(first_value(row, ACCOUNT_NAME_FIELDS))
+
+
+def latest_per_account(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep only the rows belonging to each account's most recent statement.
+
+    Balances and holdings are point-in-time; summing them across months
+    double-counts. Rows for an account that share its latest recency_key are
+    all retained (so every holding of the newest statement survives)."""
+    if not rows:
+        return rows
+    latest: dict[str, str] = {}
+    for row in rows:
+        acct = account_identity(row)
+        latest[acct] = max(latest.get(acct, ""), recency_key(row))
+    return [row for row in rows if recency_key(row) == latest[account_identity(row)]]
+
+
+# --------------------------------------------------------------------------- #
 # Markdown frontmatter
 # --------------------------------------------------------------------------- #
 _FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---", re.DOTALL)

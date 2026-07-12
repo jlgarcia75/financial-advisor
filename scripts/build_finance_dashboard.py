@@ -24,11 +24,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _finance_common import (  # noqa: E402
     first_value,
+    latest_per_account,
     normalize_text,
     parse_number,
     period_of,
     read_csv,
     read_json,
+    recency_key,
     write_csv,
 )
 
@@ -101,6 +103,7 @@ def build_networth(manual_accounts, linked_accounts, recon, notes):
                 "account_type": first_value(row, ACCOUNT_TYPE_FIELDS) or note.get("account_type", ""),
                 "tax_treatment": note.get("tax_treatment", ""),
                 "source": source,
+                "as_of": recency_key(row),
                 "current_value": value,
                 "reconciliation_status": status,
                 "included_in_networth": not excluded_reason,
@@ -208,15 +211,16 @@ def write_dashboard_md(path, period, snapshot, net_worth, allocation, alloc_tota
         "",
         "## Net worth",
         "",
-        f"**{fmt_money(net_worth)}** across {len(included)} included accounts.",
+        f"**{fmt_money(net_worth)}** across {len(included)} included accounts "
+        "(each account valued at its most recent statement).",
         "",
-        "| Account | Institution | Type | Tax | Source | Value |",
-        "| --- | --- | --- | --- | --- | --- |",
+        "| Account | Institution | Type | Tax | Source | As of | Value |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
     ]
     for r in sorted(included, key=lambda r: -(r["current_value"] or 0)):
         lines.append(
             f"| {r['account_name']} | {r['institution']} | {r['account_type']} | "
-            f"{r['tax_treatment'] or '—'} | {r['source']} | {fmt_money(r['current_value'])} |"
+            f"{r['tax_treatment'] or '—'} | {r['source']} | {r['as_of'] or '—'} | {fmt_money(r['current_value'])} |"
         )
     if excluded:
         lines += ["", "### Excluded from net worth", "",
@@ -262,11 +266,14 @@ def main() -> int:
     manifest = read_json(manifest_path)
     datasets = manifest.get("datasets", {})
 
-    manual_accounts = read_csv(args.inputs_dir / datasets.get("accounts", "manual_statements_master_accounts.csv"))
-    manual_holdings = read_csv(args.inputs_dir / datasets.get("holdings", "manual_statements_master_holdings.csv"))
+    # Balances and holdings are point-in-time: when masters hold several months,
+    # use only each account's latest statement so net worth is not summed across
+    # months. Transactions are flows and stay as a full multi-month time series.
+    manual_accounts = latest_per_account(read_csv(args.inputs_dir / datasets.get("accounts", "manual_statements_master_accounts.csv")))
+    manual_holdings = latest_per_account(read_csv(args.inputs_dir / datasets.get("holdings", "manual_statements_master_holdings.csv")))
     manual_tx = read_csv(args.inputs_dir / datasets.get("transactions", "manual_statements_master_transactions.csv"))
-    linked_accounts = read_csv(args.inputs_dir / "linked_accounts.csv")
-    linked_holdings = read_csv(args.inputs_dir / "linked_holdings.csv")
+    linked_accounts = latest_per_account(read_csv(args.inputs_dir / "linked_accounts.csv"))
+    linked_holdings = latest_per_account(read_csv(args.inputs_dir / "linked_holdings.csv"))
     linked_tx = read_csv(args.inputs_dir / "linked_transactions.csv")
 
     recon = reconciliation_status_map(args.inputs_dir)
@@ -282,7 +289,7 @@ def main() -> int:
 
     write_csv(args.reviews_dir / "NET_WORTH_snapshot.csv", snapshot,
               preferred=["account_id", "account_name", "institution", "account_type",
-                         "tax_treatment", "source", "current_value", "included_in_networth"])
+                         "tax_treatment", "source", "as_of", "current_value", "included_in_networth"])
     write_csv(args.reviews_dir / "allocation_summary.csv", allocation)
     write_csv(args.reviews_dir / "cash_flow_summary.csv", cash_flow)
     write_dashboard_md(args.reviews_dir / f"{period}_dashboard.md", period,
