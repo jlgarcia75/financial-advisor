@@ -145,12 +145,18 @@ def main() -> int:
         check({r["period"] for r in cf} == {"2025-11", "2025-12"}, "cash flow spans both months")
 
         print("[3] reconcile (duplicate + linked-only)")
+        # Two non-matching linked accounts (LINK2, LINK3) tie at score 0 for each
+        # manual account — this reproduces the dict-comparison crash if match_accounts
+        # ever sorts by the raw rows again.
         write_csv(linked / "linked_accounts.csv", [
             {"account_id": "ACC1", "account_name": "Test Roth IRA", "institution": "test",
              "account_type": "roth_ira", "account_last4": "0001", "current_value": 100.0,
              "as_of_date": "2025-12-28", "source": "linked"},
             {"account_id": "LINK2", "account_name": "Outside Checking", "institution": "bank",
              "account_type": "checking", "account_last4": "9999", "current_value": 50.0,
+             "as_of_date": "2025-12-28", "source": "linked"},
+            {"account_id": "LINK3", "account_name": "Outside Savings", "institution": "bank",
+             "account_type": "savings", "account_last4": "8888", "current_value": 75.0,
              "as_of_date": "2025-12-28", "source": "linked"},
         ])
         run([SCRIPTS / "validate_statement_csvs.py", "--linked", linked / "linked_accounts.csv"])
@@ -160,6 +166,7 @@ def main() -> int:
                  for r in csv.DictReader((inputs / "manual_linked_reconciliation.csv").open())}
         check(recon.get("ACC1") == "probable_duplicate", f"ACC1 flagged probable_duplicate (got {recon.get('ACC1')})")
         check(recon.get("LINK2") == "linked_only", f"LINK2 flagged linked_only (got {recon.get('LINK2')})")
+        check(recon.get("LINK3") == "linked_only", f"LINK3 flagged linked_only (got {recon.get('LINK3')})")
 
         print("[4] create_monthly_review_prompt")
         run([SCRIPTS / "create_monthly_review_prompt.py", "--inputs-dir", inputs, "--reviews-dir", reviews])

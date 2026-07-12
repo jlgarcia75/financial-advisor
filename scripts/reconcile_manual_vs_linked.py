@@ -99,9 +99,11 @@ def match_accounts(manual_rows: list[dict[str, str]], linked_rows: list[dict[str
     results = []
     for row in manual_rows:
         manual = account_view(row)
-        ranked = sorted((score_accounts(manual, view), raw, view) for raw, view in linked_views)
-        if ranked:
-            (score, reasons), _, best = ranked[-1]
+        scored = [(score_accounts(manual, view), raw, view) for raw, view in linked_views]
+        if scored:
+            # Key on the numeric score only — never compare the raw dicts, which
+            # are unorderable and blow up when two candidates tie on (score, reasons).
+            (score, reasons), _, best = max(scored, key=lambda t: t[0][0])
         else:
             score, reasons, best = 0.0, [], {'account_id':'','account_name':'','institution':'','account_type':'','last4':''}
         status = 'exact_or_high_confidence' if score >= 85 else 'likely_match' if score >= 65 else 'possible_match' if score >= 45 else 'unmatched'
