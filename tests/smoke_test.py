@@ -207,6 +207,32 @@ def main() -> int:
         check("tax-deferred $200.00" in text,
               "note-less 401k inferred as tax_deferred (not left unspecified)")
 
+        print("[8] extract_central_lending (capital-account statement type)")
+        cl_md = statements / "2025-02_test-capital_statement.md"
+        cl_md.write_text(
+            '---\ntype: financial_statement\nstatement_id: "2025-02_test-capital_statement"\n'
+            "institution: central-lending\nstatement_type: central-lending-capital-account\n"
+            "status: ready\n---\n\n"
+            "02/28/2025\nCapital Account Statement\nTest Income Fund\nInvestor: Alice\n"
+            "| | Beginning Balance | | $1,000.00 | 0 |\n"
+            "| --- | --- | --- | --- | --- |\n"
+            "| | Ending Balance | | $1,100.00 | $1,100.00 |\n"
+            "| Ownership | | 2.5% | Return of capital | $0 |\n"
+            "| Total Commitment | | $5,000 | Return on capital | $50 |\n"
+            "Contributions to date $1,050.00 Distributions to date $50.00\n"
+            "Transactions\n| Date | Transaction Type | Description | Amount |\n"
+            "| 02/28/2025 | Distribution | Distribution | $50.00 |\n"
+        )
+        run([SCRIPTS / "extract_central_lending.py", cl_md, "--out-dir", statements])
+        acc = list(csv.DictReader((statements / "2025-02_test-capital_statement_accounts.csv").open()))
+        check(len(acc) == 1 and float(acc[0]["ending_balance"]) == 1100.0,
+              "capital-account ending balance parsed (1100.00)")
+        check(float(acc[0]["ownership_pct"]) == 2.5, "capital-account ownership parsed (2.5%)")
+        tx = list(csv.DictReader((statements / "2025-02_test-capital_statement_transactions.csv").open()))
+        check(len(tx) == 1 and float(tx[0]["amount"]) == 50.0, "capital-account transaction parsed")
+        run([SCRIPTS / "validate_statement_csvs.py", cl_md])
+        check(True, "central-lending CSVs validate against schemas/central-lending-capital-account")
+
     print("\nSMOKE TEST PASSED")
     return 0
 

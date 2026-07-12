@@ -1,0 +1,10 @@
+{
+  "fields": [
+    {"name": "statement_id", "type": "string", "constraints": {"required": true}},
+    {"name": "metric", "type": "string", "constraints": {"required": true}},
+    {"name": "value", "type": "number"},
+    {"name": "basis", "type": "string"},
+    {"name": "source_section", "type": "string"}
+  ],
+  "missingValues": [""]
+}

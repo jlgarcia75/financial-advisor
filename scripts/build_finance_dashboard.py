@@ -93,7 +93,8 @@ def infer_tax_treatment(account_type: str) -> str:
     if any(k in t for k in ("credit", "card", "loan", "mortgage", "liabilit")):
         return "liability"
     if any(k in t for k in ("checking", "saving", "brokerage", "individual", "trust",
-                            "cash", "money market", "taxable", "tod", "stock", "investment")):
+                            "cash", "money market", "taxable", "tod", "stock", "investment",
+                            "capital", "fund", "partnership", "lp", "private")):
         return "taxable"
     return ""
 
