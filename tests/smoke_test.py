@@ -108,8 +108,11 @@ def check(cond, msg):
 def main() -> int:
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
-        statements = root / "statements"; inputs = root / "inputs"
-        reviews = root / "reviews"; accounts = root / "accounts"; linked = root / "linked"
+        statements = root / "statements"
+        inputs = root / "inputs"
+        reviews = root / "reviews"
+        accounts = root / "accounts"
+        linked = root / "linked"
         for d in (statements, inputs, reviews, accounts, linked):
             d.mkdir(parents=True)
 
@@ -167,6 +170,14 @@ def main() -> int:
              "--inputs-dir", inputs, "--reviews-dir", reviews])
         report = (reviews / "data_quality_report.md").read_text()
         check("Errors: **0**" in report, "data-quality report has 0 errors")
+
+        print("[6] ingest_linked_export (one-command orchestration)")
+        (inputs / "manual_linked_reconciliation.csv").unlink()  # prove ingest regenerates it
+        run([SCRIPTS / "ingest_linked_export.py", "--source", linked, "--inputs-dir", inputs,
+             "--reviews-dir", reviews, "--accounts-dir", accounts, "--statements-dir", statements])
+        check((inputs / "manual_linked_reconciliation.csv").exists(),
+              "ingest regenerated manual_linked_reconciliation.csv")
+        check((reviews / "2025-12_dashboard.md").exists(), "ingest rebuilt the dashboard")
 
     print("\nSMOKE TEST PASSED")
     return 0
