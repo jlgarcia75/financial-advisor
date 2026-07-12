@@ -89,18 +89,24 @@ for md in "$STATEMENTS_DIR"/*_statement.md(N); do
 
   log "Processing ready statement: ${md:t}"
 
-  # Institution-specific extractor routing.
+  # Institution-specific extractor routing. Each branch sets the extractor plus the
+  # institution and statement_type used for the manifest.
+  extractor="" ; inst="" ; stype=""
   if grep -Eiq '^institution:[[:space:]]*empower|Empower Monthly Report|provider_or_custodian:[[:space:]]*Pershing' "$md"; then
     log "Detected Empower/Pershing statement"
-
-    if [[ -x "$REPO_DIR/scripts/extract_empower_statement.py" ]]; then
-      "$PYTHON_BIN" "$REPO_DIR/scripts/extract_empower_statement.py" "$md"
-    else
-      fail_file "$md" "No Empower extractor found"
-      continue
-    fi
+    extractor="extract_empower_statement.py" ; inst="empower" ; stype="multi_account_brokerage"
+  elif grep -Eiq '^institution:[[:space:]]*central-lending|Capital Account Statement|Central Florida Income Fund|Central Lending' "$md"; then
+    log "Detected Central Lending capital-account statement"
+    extractor="extract_central_lending.py" ; inst="central-lending" ; stype="central-lending-capital-account"
   else
     fail_file "$md" "No extractor route for this statement type"
+    continue
+  fi
+
+  if [[ -f "$REPO_DIR/scripts/$extractor" ]]; then
+    "$PYTHON_BIN" "$REPO_DIR/scripts/$extractor" "$md"
+  else
+    fail_file "$md" "Extractor not found: $extractor"
     continue
   fi
 
@@ -115,7 +121,7 @@ for md in "$STATEMENTS_DIR"/*_statement.md(N); do
   # 4) Create compact manifest JSON.
   if [[ -f "$REPO_DIR/scripts/create_statement_manifest.py" ]]; then
     log "Creating manifest for: ${md:t}"
-    "$PYTHON_BIN" "$REPO_DIR/scripts/create_statement_manifest.py" "$md" --institution empower
+    "$PYTHON_BIN" "$REPO_DIR/scripts/create_statement_manifest.py" "$md" --institution "$inst" --statement-type "$stype"
     # Advisor inputs manifest needs to be updated since a new statement was processed
     advisor_inputs_dirty=true
   else

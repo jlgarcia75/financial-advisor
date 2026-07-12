@@ -1,0 +1,11 @@
+{
+  "fields": [
+    {"name": "statement_id", "type": "string", "constraints": {"required": true}},
+    {"name": "date", "type": "date"},
+    {"name": "transaction_type", "type": "string"},
+    {"name": "description", "type": "string"},
+    {"name": "amount", "type": "number"},
+    {"name": "source_section", "type": "string"}
+  ],
+  "missingValues": [""]
+}

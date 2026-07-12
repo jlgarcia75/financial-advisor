@@ -1,0 +1,19 @@
+{
+  "fields": [
+    {"name": "statement_id", "type": "string", "constraints": {"required": true}},
+    {"name": "account_id", "type": "string", "constraints": {"required": true}},
+    {"name": "account_name", "type": "string", "constraints": {"required": true}},
+    {"name": "account_type", "type": "string"},
+    {"name": "institution", "type": "string"},
+    {"name": "investor", "type": "string"},
+    {"name": "ownership_pct", "type": "number"},
+    {"name": "total_commitment", "type": "number"},
+    {"name": "contributions_to_date", "type": "number"},
+    {"name": "distributions_to_date", "type": "number"},
+    {"name": "ending_balance", "type": "number"},
+    {"name": "total_account", "type": "number"},
+    {"name": "as_of_date", "type": "date"},
+    {"name": "source_section", "type": "string"}
+  ],
+  "missingValues": [""]
+}
