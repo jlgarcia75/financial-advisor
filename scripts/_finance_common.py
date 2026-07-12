@@ -108,6 +108,18 @@ def parse_date(value: Any) -> str:
     return text
 
 
+def is_date(value: Any) -> bool:
+    """True if the value parses as a supported date format."""
+    text = str(value or "").strip()
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y"):
+        try:
+            datetime.strptime(text, fmt)
+            return True
+        except ValueError:
+            pass
+    return False
+
+
 def period_of(value: Any) -> str:
     """Return the YYYY-MM period from a date-ish value, else ''."""
     iso = parse_date(value)

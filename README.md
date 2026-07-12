@@ -32,8 +32,13 @@ python3 scripts/extract_empower_statement.py /path/to/2025-12_empower-garciatrus
 
 ## Outputs
 
-- `<statement_id>.json`
+CSV datasets, written next to the input Markdown:
+
 - `<statement_id>_holdings.csv`
 - `<statement_id>_transactions.csv`
 - `<statement_id>_accounts.csv`
 - `<statement_id>_activity.csv`
+
+The extractor also prints a JSON summary of row counts to stdout (it does not
+write a `<statement_id>.json` file — the compact manifest is produced separately
+by `create_statement_manifest.py`).

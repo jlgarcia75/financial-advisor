@@ -1,28 +1,16 @@
 #!/usr/bin/env python3
 import argparse
 import json
-import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---", re.DOTALL)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _finance_common import parse_frontmatter  # noqa: E402
 
 DEFAULT_STATEMENTS_DIR = Path(
     "/Users/jesusgarcia/ObsidianVaults/second-brain/91_finance/Statements"
 )
-
-
-def parse_frontmatter(md_text: str) -> dict:
-    match = FRONTMATTER_RE.search(md_text)
-    data = {}
-    if not match:
-        return data
-
-    for line in match.group(1).splitlines():
-        if ":" in line:
-            key, value = line.split(":", 1)
-            data[key.strip()] = value.strip().strip('"').strip("'")
-    return data
 
 
 def is_ready(md_path: Path) -> bool:
