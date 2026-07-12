@@ -19,7 +19,7 @@
       ]
     },
     "state": {"type": "string"},
-    "dependents": {"type": "integer", "minimum": 0},
+    "dependents": {"type": ["integer", "string"], "description": "Integer, or blank when unknown."},
     "taxpayers": {"type": "string", "description": "e.g. 'Jesus, LeAndra'"},
     "entities": {"type": "string", "description": "Returns in scope, e.g. 'Personal (MFJ); The Garcia Family Trust'"},
     "est_agi": {"type": ["number", "string"]},
