@@ -16,8 +16,11 @@ SCHEMA_MAP = {
 }
 
 
-def load_schema(statement_type: str, dataset: str) -> dict:
-    candidates = [
+def load_schema(statement_type: str, dataset: str, schema_dir: str | None = None) -> dict:
+    candidates = []
+    if schema_dir:
+        candidates.append(REPO_DIR / "schemas" / schema_dir / SCHEMA_MAP[dataset])
+    candidates += [
         REPO_DIR / "schemas" / statement_type / SCHEMA_MAP[dataset],
         REPO_DIR / "schemas" / "empower" / SCHEMA_MAP[dataset],
     ]
@@ -25,7 +28,7 @@ def load_schema(statement_type: str, dataset: str) -> dict:
         if path.exists():
             return json.loads(path.read_text(encoding="utf-8"))
     raise FileNotFoundError(
-        f"No schema found for dataset={dataset}, statement_type={statement_type}"
+        f"No schema found for dataset={dataset}, statement_type={statement_type}, schema_dir={schema_dir}"
     )
 
 
@@ -111,10 +114,54 @@ def validate_csv(csv_path: Path, schema: dict) -> list[str]:
     return errors
 
 
+def _dataset_from_name(name: str) -> str | None:
+    """Infer dataset (accounts/holdings/...) from a CSV filename stem."""
+    for dataset in SCHEMA_MAP:
+        if name.endswith(dataset):
+            return dataset
+    return None
+
+
+def validate_linked(csv_paths: list[Path]) -> None:
+    all_errors = []
+    checked = 0
+    for csv_path in csv_paths:
+        dataset = _dataset_from_name(csv_path.stem)
+        if not dataset:
+            print(f"Skipping {csv_path.name}: cannot infer dataset", file=sys.stderr)
+            continue
+        if not csv_path.exists():
+            print(f"Skipping {csv_path}: not found", file=sys.stderr)
+            continue
+        schema = load_schema("linked", dataset, schema_dir="linked")
+        all_errors.extend(validate_csv(csv_path, schema))
+        checked += 1
+
+    if all_errors:
+        for err in all_errors:
+            print(err, file=sys.stderr)
+        sys.exit(1)
+    print(f"CSV validation passed for {checked} linked file(s)")
+
+
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("statement_md", type=Path)
+    parser = argparse.ArgumentParser(
+        description="Validate statement CSVs against reusable schemas."
+    )
+    parser.add_argument("statement_md", type=Path, nargs="?",
+                        help="Statement Markdown whose sibling CSVs to validate.")
+    parser.add_argument("--linked", type=Path, nargs="+",
+                        help="Validate linked-account CSVs against schemas/linked/.")
+    parser.add_argument("--schema-dir",
+                        help="Preferred schema subdirectory to check first (e.g. an institution).")
     args = parser.parse_args()
+
+    if args.linked:
+        validate_linked(args.linked)
+        return
+
+    if not args.statement_md:
+        parser.error("provide a statement_md path or --linked <csv...>")
 
     md_path = args.statement_md
     fm = parse_frontmatter(md_path)
@@ -128,7 +175,7 @@ def main():
         if not csv_path.exists():
             continue
 
-        schema = load_schema(statement_type, dataset)
+        schema = load_schema(statement_type, dataset, schema_dir=args.schema_dir)
         all_errors.extend(validate_csv(csv_path, schema))
 
     if all_errors:

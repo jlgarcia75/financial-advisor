@@ -134,6 +134,17 @@ for md in "$STATEMENTS_DIR"/*_statement.md(N); do
     log "FAILED: Advisor input rebuild failed" >&2
     exit 1
   fi
+
+  # Gate: run data-quality checks after rebuilding masters. Warnings are logged;
+  # hard errors are logged but do not abort (the report captures the detail).
+  if [[ -f "$REPO_DIR/scripts/check_finance_data_quality.py" ]]; then
+    log "Running data-quality checks"
+    if "$PYTHON_BIN" "$REPO_DIR/scripts/check_finance_data_quality.py"; then
+      log "Data-quality checks passed"
+    else
+      log "WARNING: Data-quality checks reported errors; see Reviews/data_quality_report.md" >&2
+    fi
+  fi
   else
     log "Advisor inputs unchanged; rebuild not required"
   fi

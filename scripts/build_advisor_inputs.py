@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 import argparse
 import csv
-import json
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _finance_common import read_json, write_json  # noqa: E402
 
 DEFAULT_STATEMENTS_DIR = Path(
     "/Users/jesusgarcia/ObsidianVaults/second-brain/91_finance/Statements"
@@ -13,9 +17,9 @@ DEFAULT_OUTPUT_DIR = Path(
 
 DATASETS = ["accounts", "holdings", "transactions", "activity"]
 
-
-def read_json(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+# One reconciliation CSV, produced by reconcile_manual_vs_linked.py, is included
+# in the package when present so downstream tools have a single entry point.
+RECONCILIATION_CSV = "manual_linked_reconciliation.csv"
 
 
 def read_csv(path: Path) -> list[dict]:
@@ -120,10 +124,51 @@ def build_inputs(statements_dir: Path, output_dir: Path) -> None:
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    row_counts = {}
     for dataset, rows in combined.items():
         out_path = output_dir / f"manual_statements_master_{dataset}.csv"
         write_csv(out_path, rows)
+        row_counts[dataset] = len(rows)
         print(f"Wrote {out_path} ({len(rows)} rows)")
+
+    write_manifest(output_dir, manifests, combined, row_counts)
+
+
+def write_manifest(output_dir: Path, manifests: list[Path], combined: dict, row_counts: dict) -> None:
+    """Emit advisor_inputs_manifest.json — one entry point tying the masters and
+    reconciliation together for the dashboard, review prompt, and the advisor LLM."""
+    periods = sorted({
+        row.get("as_of_date", "")[:7]
+        for row in combined.get("accounts", [])
+        if row.get("as_of_date")
+    })
+    accounts = sorted({
+        row.get("account_id", "") or row.get("account_name", "")
+        for row in combined.get("accounts", [])
+        if row.get("account_id") or row.get("account_name")
+    })
+
+    datasets = {
+        dataset: f"manual_statements_master_{dataset}.csv"
+        for dataset in DATASETS
+    }
+    reconciliation = (
+        RECONCILIATION_CSV if (output_dir / RECONCILIATION_CSV).exists() else None
+    )
+
+    manifest = {
+        "schema_version": "1.0",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "source_manifests": [p.name for p in manifests],
+        "periods_covered": periods,
+        "account_count": len(accounts),
+        "row_counts": row_counts,
+        "datasets": datasets,
+        "reconciliation": reconciliation,
+    }
+    out = output_dir / "advisor_inputs_manifest.json"
+    write_json(out, manifest)
+    print(f"Wrote {out}")
 
 
 def main():

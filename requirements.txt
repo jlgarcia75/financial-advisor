@@ -1,0 +1,7 @@
+# Python dependencies for the financial-advisor pipeline.
+# Core extraction/reconciliation/dashboard scripts use only the stdlib.
+# These are needed by the optional tooling noted below.
+
+markitdown        # PDF -> Markdown conversion (finance_statements.zsh)
+jsonschema        # bootstrap_statement_type.py schema tooling
+PyYAML            # extract-statement-style frontmatter parsing (if used)
