@@ -24,6 +24,7 @@ ytd_wages: ""
 ytd_withholding: ""
 estimated_payments_made: ""
 prior_year_agi: ""
+prior_year_total_tax: ""       # prior-year total federal tax — safe-harbor base (target = 110% if AGI > $150k)
 capital_loss_carryover: ""
 charitable_carryover: ""
 # Current-year constants from irs.gov (leave blank to force VERIFY tags):

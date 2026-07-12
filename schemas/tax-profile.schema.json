@@ -29,6 +29,7 @@
     "ytd_withholding": {"type": ["number", "string"]},
     "estimated_payments_made": {"type": ["number", "string"]},
     "prior_year_agi": {"type": ["number", "string"]},
+    "prior_year_total_tax": {"type": ["number", "string"], "description": "Prior-year total federal tax (safe-harbor base)."},
     "capital_loss_carryover": {"type": ["number", "string"]},
     "charitable_carryover": {"type": ["number", "string"]},
     "std_deduction": {"type": ["number", "string"]},

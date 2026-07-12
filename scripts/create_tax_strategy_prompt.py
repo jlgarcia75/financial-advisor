@@ -149,7 +149,9 @@ HOUSEHOLD PROFILE
 - Entities / returns in scope: {profile_line(fm, 'entities')}
 - Est. AGI/MAGI: {profile_line(fm, 'est_agi')}; marginal/effective bracket: {profile_line(fm, 'marginal_bracket')} / {profile_line(fm, 'effective_bracket')}
 - YTD wages: {profile_line(fm, 'ytd_wages')}; withholding: {profile_line(fm, 'ytd_withholding')}; estimated payments made: {profile_line(fm, 'estimated_payments_made')}
-- Prior-year AGI: {profile_line(fm, 'prior_year_agi')}; carryovers — capital loss {profile_line(fm, 'capital_loss_carryover')}, charitable {profile_line(fm, 'charitable_carryover')}
+- Prior-year AGI: {profile_line(fm, 'prior_year_agi')}; prior-year total federal tax: {profile_line(fm, 'prior_year_total_tax')} \
+(safe-harbor base — prior AGI over $150k, so the underpayment target is 110% of this; check it against YTD withholding + estimated payments)
+- Carryovers — capital loss {profile_line(fm, 'capital_loss_carryover')}, charitable {profile_line(fm, 'charitable_carryover')}
 
 ACCOUNTS & POSITIONS  [DATA — authoritative, deduplicated]
 - Net worth by tax treatment: taxable {money(breakdown_value(breakdown, 'tax_treatment', 'taxable'))}, \
