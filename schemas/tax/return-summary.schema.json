@@ -1,0 +1,32 @@
+{
+  "fields": [
+    {"name": "tax_year", "type": "integer", "constraints": {"required": true}},
+    {"name": "filing_status", "type": "string"},
+    {"name": "state", "type": "string"},
+    {"name": "agi", "type": "number"},
+    {"name": "taxable_income", "type": "number"},
+    {"name": "total_tax", "type": "number"},
+    {"name": "effective_rate", "type": "string"},
+    {"name": "marginal_rate", "type": "string"},
+    {"name": "total_income", "type": "number"},
+    {"name": "wages", "type": "number"},
+    {"name": "taxable_interest", "type": "number"},
+    {"name": "ordinary_dividends", "type": "number"},
+    {"name": "qualified_dividends", "type": "number"},
+    {"name": "net_st_cap_gain", "type": "number"},
+    {"name": "net_lt_cap_gain", "type": "number"},
+    {"name": "capital_loss_carryover_st", "type": "number"},
+    {"name": "capital_loss_carryover_lt", "type": "number"},
+    {"name": "roth_conversions", "type": "number"},
+    {"name": "deduction_type", "type": "string"},
+    {"name": "total_deductions", "type": "number"},
+    {"name": "qbi_deduction", "type": "number"},
+    {"name": "niit", "type": "number"},
+    {"name": "amt", "type": "number"},
+    {"name": "ctc", "type": "number"},
+    {"name": "federal_withholding", "type": "number"},
+    {"name": "estimated_payments", "type": "number"},
+    {"name": "source_doc", "type": "string"}
+  ],
+  "missingValues": [""]
+}

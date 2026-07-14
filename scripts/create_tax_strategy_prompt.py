@@ -29,6 +29,13 @@ VAULT = Path("/Users/jesusgarcia/ObsidianVaults/second-brain/91_finance")
 DEFAULT_INPUTS_DIR = VAULT / "Reviews/inputs"
 DEFAULT_REVIEWS_DIR = VAULT / "Reviews"
 DEFAULT_TAX_PROFILE = VAULT / "tax_profile.md"
+DEFAULT_RETURNS_DIR = VAULT / "tax_returns"
+
+RETURN_SUMMARY_COLS = [
+    ("tax_year", "Year"), ("agi", "AGI"), ("taxable_income", "Taxable income"),
+    ("total_tax", "Total tax"), ("effective_rate", "Eff. rate"),
+    ("net_lt_cap_gain", "LTCG"), ("qualified_dividends", "Qual. div"), ("niit", "NIIT"),
+]
 
 DIVIDEND = lambda t: "dividend" in t  # noqa: E731
 INTEREST = lambda t: "interest" in t  # noqa: E731
@@ -64,12 +71,39 @@ def breakdown_value(rows, dimension, key):
     return ""
 
 
+def returns_section(returns_dir: Path) -> str:
+    """Prior-year returns: reference docs to attach + a compact multi-year summary."""
+    docs = sorted(p.name for p in returns_dir.glob("*_return.md")) if returns_dir.exists() else []
+    summary = read_csv(returns_dir / "tax_returns_summary.csv")
+    if not docs and not summary:
+        return ("PRIOR-YEAR RETURNS\n- None provided yet. See docs/tax-return-ingest.md to add "
+                "redacted returns (exact total tax, bracket, capital gains, NIIT, prior conversions).")
+
+    lines = ["PRIOR-YEAR RETURNS  [DATA — from filed returns]"]
+    if docs:
+        lines.append(f"- Reference documents (attach these, redacted): {', '.join(docs)}")
+    if summary:
+        summary = sorted(summary, key=lambda r: str(r.get("tax_year", "")))
+        header = " | ".join(label for _, label in RETURN_SUMMARY_COLS)
+        lines += ["- Multi-year summary:", f"  | {header} |",
+                  "  | " + " | ".join("---" for _ in RETURN_SUMMARY_COLS) + " |"]
+        for row in summary:
+            cells = []
+            for col, _ in RETURN_SUMMARY_COLS:
+                raw = row.get(col, "")
+                cells.append(money(raw) if col not in ("tax_year", "effective_rate") and raw else (str(raw).strip() or "—"))
+            lines.append("  | " + " | ".join(cells) + " |")
+    return "\n".join(lines)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate a data-grounded tax-strategy prompt.")
     parser.add_argument("--inputs-dir", type=Path, default=DEFAULT_INPUTS_DIR)
     parser.add_argument("--reviews-dir", type=Path, default=DEFAULT_REVIEWS_DIR)
     parser.add_argument("--tax-profile", type=Path, default=DEFAULT_TAX_PROFILE)
     parser.add_argument("--tax-year", help="Override the tax year (default: profile.tax_year or latest period).")
+    parser.add_argument("--returns-dir", type=Path, default=DEFAULT_RETURNS_DIR,
+                        help="Folder with redacted prior-year returns + tax_returns_summary.csv.")
     parser.add_argument("--out", type=Path, help="Output path (default: <reviews>/<year>_tax_strategy_prompt.md).")
     args = parser.parse_args()
 
@@ -118,6 +152,7 @@ def main() -> int:
     dividends = sum_transactions(transactions, year, DIVIDEND)
     interest = sum_transactions(transactions, year, INTEREST)
     fees = sum_transactions(transactions, year, FEES)
+    prior_returns = returns_section(args.returns_dir)
 
     prompt = f"""# {year} Tax Strategy — Advisor Prompt
 
@@ -166,6 +201,8 @@ tax-free {money(breakdown_value(breakdown, 'tax_treatment', 'tax_free'))}
   provide basis to enable tax-loss-harvesting and cap-gains analysis.
 - Inherited IRAs subject to the 10-year rule:
 {inherited_lines}
+
+{prior_returns}
 
 DELIVERABLES  (prioritized, deadline-tagged action plan)
 1. Top strategies ranked by after-tax $ impact — each with the move, est. savings, deadline,

@@ -196,11 +196,21 @@ def main() -> int:
             "---\ntype: tax_profile\ntax_year: 2025\nfiling_status: married_filing_jointly\n"
             "state: CA\ntaxpayers: \"Alice\"\n---\n\n# profile\n"
         )
+        returns_dir = root / "tax_returns"
+        returns_dir.mkdir()
+        (returns_dir / "2024_return.md").write_text("redacted return\n")
+        write_csv(returns_dir / "tax_returns_summary.csv", [
+            {"tax_year": "2024", "agi": "300000", "taxable_income": "270000",
+             "total_tax": "45000", "effective_rate": "16.7%", "net_lt_cap_gain": "5000",
+             "qualified_dividends": "3000", "niit": "1200", "source_doc": "2024_return.md"},
+        ])
         run([SCRIPTS / "create_tax_strategy_prompt.py", "--inputs-dir", inputs,
-             "--reviews-dir", reviews, "--tax-profile", tax_profile])
+             "--reviews-dir", reviews, "--tax-profile", tax_profile, "--returns-dir", returns_dir])
         tax_prompt = reviews / "2025_tax_strategy_prompt.md"
         check(tax_prompt.exists(), "tax strategy prompt written")
         text = tax_prompt.read_text()
+        check("2024_return.md" in text and "$45,000.00" in text,
+              "prior-year returns section lists the doc and its total tax")
         check("tax-free $100.00" in text, "tax prompt embeds net worth by tax treatment [DATA]")
         check("married_filing_jointly" in text, "tax prompt pulls filing status from profile")
         check("NOT AVAILABLE" in text, "tax prompt flags missing cost basis instead of fabricating")
