@@ -39,10 +39,15 @@ DATE_RE = re.compile(
     r"\s+\d{1,2},\s+\d{4}$", re.IGNORECASE)
 INT_RE = re.compile(r"^\d[\d,]*$")
 TOTAL_RE = re.compile(r"(\d[\d,]*)\s+RSUs\b", re.IGNORECASE)
-ANCHOR_RE = re.compile(r"^vesting\s+date$", re.IGNORECASE)
+ANCHOR_RE = re.compile(r"^vesting\s+date:?$", re.IGNORECASE)
 TERMINATOR_RE = re.compile(
     r"^(retirement vesting|additional documents|grant acceptance|you agree|you understand)",
     re.IGNORECASE)
+# Newer Intel notices carry mail-merge tags after each value, e.g.
+#   May 31, 2026
+#   %%VEST_DATE_PERIOD1,'Month DD, YYYY'%-%
+PERIOD_TAG_RE = re.compile(r"%%\s*(VEST_DATE|SHARES)_PERIOD(\d+)", re.IGNORECASE)
+TOTAL_TAG_RE = re.compile(r"%%\s*TOTAL_SHARES_GRANTED", re.IGNORECASE)
 
 
 def parse_filename(path: Path) -> tuple[str, str]:
@@ -65,13 +70,48 @@ def to_iso(date_text: str) -> str:
     return datetime.strptime(date_text.strip(), "%B %d, %Y").date().isoformat()
 
 
-def extract_schedule(text: str) -> list[tuple[str, int]]:
-    """List of (vest_date_iso, shares) from the vesting-schedule region.
+def extract_schedule(text: str) -> tuple[list[tuple[str, int]], int | None]:
+    """(list of (vest_date_iso, shares), grant_total_or_None) from the notice.
 
-    Anchors on the 'Vesting Date' table header and stops at the next section, then
-    collects date tokens and integer tokens in document order and zips them — order
-    is the tranche order in both the flattened and real-table layouts."""
+    Two Intel layouts are supported: newer notices tag each value with a mail-merge
+    placeholder (VEST_DATE_PERIODn / SHARES_PERIODn / TOTAL_SHARES_GRANTED); older
+    ones are a flat block of dates then a block of counts. The total is returned when
+    the tagged layout provides it, else None (the caller falls back to extract_total)."""
     lines = [ln.strip() for ln in text.splitlines()]
+    if any(PERIOD_TAG_RE.search(ln) for ln in lines):
+        return _schedule_from_tags(lines)
+    return _schedule_from_blocks(lines), None
+
+
+def _schedule_from_tags(lines: list[str]) -> tuple[list[tuple[str, int]], int | None]:
+    """Pair each mail-merge tag with the nearest preceding value line. Immune to
+    stray page numbers and to the total sitting inside the schedule region."""
+    dates: dict[int, str] = {}
+    counts: dict[int, int] = {}
+    total: int | None = None
+    prev: str | None = None
+    for ln in lines:
+        pm = PERIOD_TAG_RE.search(ln)
+        if pm and prev:
+            kind, n = pm.group(1).upper(), int(pm.group(2))
+            if kind == "VEST_DATE" and DATE_RE.match(prev):
+                dates[n] = to_iso(prev)
+            elif kind == "SHARES" and INT_RE.match(prev):
+                counts[n] = int(prev.replace(",", ""))
+        elif TOTAL_TAG_RE.search(ln) and prev and INT_RE.match(prev):
+            total = int(prev.replace(",", ""))
+        if ln and "%%" not in ln:
+            prev = ln
+    periods = sorted(set(dates) & set(counts))
+    schedule = [(dates[p], counts[p]) for p in periods]
+    if not schedule:
+        raise SystemExit("No tagged vesting periods parsed — check the converted Markdown.")
+    return schedule, total
+
+
+def _schedule_from_blocks(lines: list[str]) -> list[tuple[str, int]]:
+    """Older flat layout: anchor on the 'Vesting Date' header, stop at the next
+    section, then zip date tokens with integer tokens in document order."""
     anchor = next((i for i, ln in enumerate(lines) if ANCHOR_RE.match(ln)), None)
     if anchor is None:
         raise SystemExit("No 'Vesting Date' header found — is this an RSU Notice of Grant?")
@@ -113,8 +153,9 @@ def extract_grant_date(text: str) -> str:
 def parse_notice(path: Path, today: date) -> list[dict]:
     symbol, grant_id = parse_filename(path)
     text = path.read_text(encoding="utf-8", errors="ignore")
-    schedule = extract_schedule(text)
-    total = extract_total(text)
+    schedule, total = extract_schedule(text)
+    if total is None:
+        total = extract_total(text)
     scheduled = sum(s for _, s in schedule)
     if total is not None and total != scheduled:
         raise SystemExit(

@@ -310,6 +310,30 @@ def main() -> int:
              "--csv", rsu_csv, "--today", "2026-07-23"])
         check(len(list(csv.DictReader(rsu_csv.open()))) == 3, "re-import is idempotent (no duplicate rows)")
 
+        # Newer Intel template: 'Vesting Date:' colon header, mail-merge %%TAGS%-%,
+        # the total inside the schedule region, and a stray page-number line.
+        (grants / "intc_20000002_rsu.md").write_text(
+            "INTEL CORPORATION\nNOTICE OF GRANT\n\nGrant Number:\n\nGrant Date:\n\n"
+            "20000002\n%%OPTION_NUMBER%-%\n\nMarch 1, 2026\n%%OPTION_DATE%-%\n\n"
+            "Vesting Schedule:\n\nVesting Date:\n\n300\n%%TOTAL_SHARES_GRANTED,'999,999,999'%-%\n\n"
+            "RSUs:\n\nMay 31, 2026\n%%VEST_DATE_PERIOD1,'Month DD, YYYY'%-%\n\n"
+            "100\n%%SHARES_PERIOD1,'999,999,999'%-%\n\n1\n\n"
+            "November 30, 2026\n%%VEST_DATE_PERIOD2,'Month DD, YYYY'%-%\n\n"
+            "100\n%%SHARES_PERIOD2,'999,999,999'%-%\n\n"
+            "February 28, 2027\n%%VEST_DATE_PERIOD3,'Month DD, YYYY'%-%\n\n"
+            "100\n%%SHARES_PERIOD3,'999,999,999'%-%\n\nRetirement Vesting Acceleration:\n\nYes\n"
+        )
+        tagged_csv = grants / "rsu_tagged.csv"
+        run([SCRIPTS / "import_rsu_grants.py", grants / "intc_20000002_rsu.md",
+             "--csv", tagged_csv, "--today", "2026-07-23"])
+        trows = {r["vest_date"]: r for r in csv.DictReader(tagged_csv.open())}
+        check(len(trows) == 3 and all(int(r["shares"]) == 100 for r in trows.values()),
+              "tagged template: 3 tranches parsed, stray page-number ignored (checksum 300)")
+        check(trows["2026-05-31"]["status"] == "vested" and trows["2026-11-30"]["status"] == "unvested",
+              "tagged template: vested/unvested status correct")
+        check(trows["2026-05-31"]["grant_date"] == "2026-03-01",
+              "tagged template: grant_date parsed from pre-schedule date")
+
     print("\nSMOKE TEST PASSED")
     return 0
 
