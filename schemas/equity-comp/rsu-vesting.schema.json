@@ -1,0 +1,14 @@
+{
+  "fields": [
+    {"name": "symbol", "type": "string", "constraints": {"required": true}},
+    {"name": "grant_id", "type": "string"},
+    {"name": "grant_date", "type": "date"},
+    {"name": "vest_date", "type": "date"},
+    {"name": "shares", "type": "number", "constraints": {"required": true}},
+    {"name": "status", "type": "string"},
+    {"name": "price_per_share", "type": "number"},
+    {"name": "source", "type": "string"},
+    {"name": "notes", "type": "string"}
+  ],
+  "missingValues": [""]
+}
