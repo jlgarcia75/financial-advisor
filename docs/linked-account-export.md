@@ -31,7 +31,7 @@ fine and are ignored. Validated by `schemas/linked/{accounts,holdings,transactio
 `account_id, account_name, institution, account_type, account_last4, current_value, as_of_date, source`
 
 **linked_holdings.csv** — one row per position
-`account_id, account_name, institution, account_last4, symbol, security_name, quantity, current_price, market_value, as_of_date, source`
+`account_id, account_name, institution, account_last4, symbol, security_name, asset_class, quantity, current_price, market_value, as_of_date, source`
 
 **linked_transactions.csv** — one row per transaction
 `transaction_id, account_id, account_name, institution, date, description, merchant_name, amount, category, source`
@@ -42,6 +42,9 @@ Conventions:
   Outflows/withdrawals are negative.
 - `as_of_date` / `date` — `YYYY-MM-DD`.
 - `source` — put `linked` so provenance is preserved after merging.
+- `asset_class` — `Equity`, `Fixed Income`, or `Cash and Cash Equivalents`. Optional:
+  if left blank the dashboard infers it from the symbol/security name, but providing
+  it (when ChatGPT knows the security) is more accurate than the inference.
 
 ## The monthly export prompt
 
@@ -58,8 +61,9 @@ account_id,account_name,institution,account_type,account_last4,current_value,as_
 - account_last4: last 4 digits as text; source: linked.
 
 2) linked_holdings.csv
-account_id,account_name,institution,account_last4,symbol,security_name,quantity,current_price,market_value,as_of_date,source
+account_id,account_name,institution,account_last4,symbol,security_name,asset_class,quantity,current_price,market_value,as_of_date,source
 - One row per investment position in any linked brokerage/retirement account.
+- asset_class: one of Equity, Fixed Income, Cash and Cash Equivalents; leave blank if unsure.
 - Numbers only; source: linked. If I have no linked investment positions, output just the header.
 
 3) linked_transactions.csv

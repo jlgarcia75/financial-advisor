@@ -99,6 +99,32 @@ def infer_tax_treatment(account_type: str) -> str:
     return ""
 
 
+# Ordered keyword rules for classifying a holding that arrives without an
+# asset_class (linked exports don't carry one). Cash is checked before fixed
+# income so a "government money market" fund lands in cash, not fixed income.
+# Anything with a security but no keyword match defaults to Equity (stocks,
+# index funds, ETFs); only a row with no symbol and no name stays Unclassified.
+CASH_KEYWORDS = ("money market", "stable value", "cash reserves", "cash equivalent",
+                 "u s dollar", "us dollar", "treasury bill")
+FIXED_INCOME_KEYWORDS = ("bond", "debt", "treasury", "fixed income", "fixed-income",
+                         "tips", "municipal", "gov securities", "income fund - bond")
+
+
+def infer_asset_class(symbol: str, security_name: str) -> str:
+    """Best-effort asset class from a holding's symbol/name, used only when the
+    row carries no asset_class. Manual (Empower) holdings keep their own value;
+    this fills the gap for linked holdings so nothing lands in 'Unclassified'."""
+    sym = normalize_text(symbol)
+    blob = f"{sym} {normalize_text(security_name)}".strip()
+    if not blob:
+        return "Unclassified"
+    if sym.startswith("cur:") or any(k in blob for k in CASH_KEYWORDS):
+        return "Cash and Cash Equivalents"
+    if any(k in blob for k in FIXED_INCOME_KEYWORDS):
+        return "Fixed Income"
+    return "Equity"
+
+
 def build_networth(manual_accounts, linked_accounts, recon, notes):
     """One row per account with dedup + include rules applied."""
     snapshot = []
@@ -154,22 +180,30 @@ def build_networth_breakdown(snapshot, dimension, unlabeled="unspecified"):
     ]
 
 
-def build_allocation(manual_holdings, linked_holdings, recon, notes):
-    """Market value by asset_class and by account_type, duplicates/excludes dropped."""
+def build_allocation(manual_holdings, linked_holdings, recon, notes, type_by_account):
+    """Market value by asset_class and by account_type, duplicates/excludes dropped.
+
+    Holdings that arrive without an asset_class (linked exports) are classified
+    deterministically from their symbol/name; account_type is resolved from the
+    account note or the accounts CSV when the holding row omits it — so linked
+    positions no longer pile up under 'Unclassified'."""
     by_class: dict[str, float] = {}
     by_type: dict[str, float] = {}
     total = 0.0
     for source, rows in (("manual_statement", manual_holdings), ("linked", linked_holdings)):
         for row in rows:
             key = account_key(row)
-            note = notes.get(normalize_text(first_value(row, ACCOUNT_ID_FIELDS)), {})
+            account_id = normalize_text(first_value(row, ACCOUNT_ID_FIELDS))
+            note = notes.get(account_id, {})
             if source == "manual_statement" and recon.get(key, "") in DUPLICATE_STATUSES:
                 continue
             if note.get("include_in_networth", "").lower() == "false":
                 continue
             mv = parse_number(first_value(row, HOLDING_VALUE_FIELDS)) or 0.0
-            asset_class = first_value(row, ("asset_class",)) or "Unclassified"
-            acct_type = first_value(row, ACCOUNT_TYPE_FIELDS) or note.get("account_type", "") or "Unclassified"
+            asset_class = first_value(row, ("asset_class",)) or infer_asset_class(
+                first_value(row, ("symbol",)), first_value(row, ("security_name",)))
+            acct_type = (first_value(row, ACCOUNT_TYPE_FIELDS) or note.get("account_type", "")
+                         or type_by_account.get(account_id, "") or "Unclassified")
             by_class[asset_class] = by_class.get(asset_class, 0.0) + mv
             by_type[acct_type] = by_type.get(acct_type, 0.0) + mv
             total += mv
@@ -335,9 +369,18 @@ def main() -> int:
     recon = reconciliation_status_map(args.inputs_dir)
     notes = load_account_notes(args.accounts_dir)
 
+    # account_id -> account_type from the account rows, so holdings whose own row
+    # omits account_type (linked holdings) still resolve their type in allocation.
+    type_by_account = {}
+    for row in (*manual_accounts, *linked_accounts):
+        aid = normalize_text(first_value(row, ACCOUNT_ID_FIELDS))
+        acct_type = first_value(row, ACCOUNT_TYPE_FIELDS)
+        if aid and acct_type:
+            type_by_account[aid] = acct_type
+
     snapshot = build_networth(manual_accounts, linked_accounts, recon, notes)
     net_worth = round(sum(r["current_value"] or 0.0 for r in snapshot if r["included_in_networth"]), 2)
-    allocation, alloc_total = build_allocation(manual_holdings, linked_holdings, recon, notes)
+    allocation, alloc_total = build_allocation(manual_holdings, linked_holdings, recon, notes, type_by_account)
     cash_flow = build_cash_flow(manual_tx, linked_tx, recon, notes)
     by_tax = build_networth_breakdown(snapshot, "tax_treatment")
     by_owner = build_networth_breakdown(snapshot, "owner")

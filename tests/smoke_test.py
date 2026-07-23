@@ -127,8 +127,29 @@ def main() -> int:
         check((inputs / "advisor_inputs_manifest.json").exists(), "advisor_inputs_manifest.json written")
 
         print("[2] build_finance_dashboard (point-in-time + breakdowns)")
+        # Linked holdings arrive with no asset_class column; the dashboard must
+        # classify them deterministically so none land in "Unclassified".
+        write_csv(inputs / "linked_holdings.csv", [
+            {"account_id": "LINK4", "account_name": "Employer 401k", "institution": "fidelity",
+             "symbol": "SCHZ", "security_name": "Schwab US Aggregate Bond ETF",
+             "market_value": 120.0, "as_of_date": "2025-12-28", "source": "linked"},
+            {"account_id": "LINK4", "account_name": "Employer 401k", "institution": "fidelity",
+             "symbol": "SPAXX", "security_name": "Fidelity Government Money Market Fund",
+             "market_value": 80.0, "as_of_date": "2025-12-28", "source": "linked"},
+            {"account_id": "LINK4", "account_name": "Employer 401k", "institution": "fidelity",
+             "symbol": "VOO", "security_name": "Vanguard S&P 500 ETF",
+             "market_value": 200.0, "as_of_date": "2025-12-28", "source": "linked"},
+        ])
         run([SCRIPTS / "build_finance_dashboard.py", "--inputs-dir", inputs,
              "--reviews-dir", reviews, "--accounts-dir", accounts])
+        alloc = {(r["dimension"], r["key"]): float(r["market_value"])
+                 for r in csv.DictReader((reviews / "allocation_summary.csv").open())}
+        check(("asset_class", "Unclassified") not in alloc,
+              "no Unclassified asset class (linked holdings inferred from symbol/name)")
+        check(alloc.get(("asset_class", "Fixed Income")) == 120.0,
+              "linked bond ETF inferred as Fixed Income")
+        check(alloc.get(("asset_class", "Cash and Cash Equivalents")) == 80.0 + (500.0 * 0.4),
+              "linked money-market inferred as Cash, added to manual cash")
         snap = list(csv.DictReader((reviews / "NET_WORTH_snapshot.csv").open()))
         included = [r for r in snap if r["included_in_networth"] == "True"]
         nw = round(sum(float(r["current_value"]) for r in included), 2)
