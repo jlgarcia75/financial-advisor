@@ -50,7 +50,42 @@ python3 scripts/create_tax_strategy_prompt.py --rsu-price INTC=109.83
 that symbol. Actual income is always the FMV on the real vest date — projections are planning
 estimates only.
 
-## Workflow
+## Importing grant notices automatically (recommended)
+
+Instead of typing tranches by hand, let the pipeline read your **RSU Notice of Grant** PDFs.
+
+1. Download each Notice of Grant (Intel/E\*TRADE) and convert it to Markdown, e.g.:
+
+   ```bash
+   markitdown intc_14128360_rsu.pdf > intc_14128360_rsu.md
+   ```
+
+2. Name each file `<symbol>_<grant_number>_*.md` (e.g. `intc_14128360_rsu.md`). **The filename
+   is the source of the symbol and grant number** — the PDF→Markdown flatten makes the in-body
+   grant number ambiguous with the WWID, so the filename is authoritative. Drop the files in
+   `equity_comp/grant_notices/`.
+
+3. Import:
+
+   ```bash
+   python3 scripts/import_rsu_grants.py            # reads equity_comp/grant_notices/*.md
+   # or specific files:
+   python3 scripts/import_rsu_grants.py ~/Downloads/intc_14128360_rsu.md --dry-run
+   ```
+
+   It reads the vesting schedule, writes **one row per vest tranche**, and sets `status` to
+   `vested`/`unvested` from today's date. It **checksums** the tranche shares against the notice's
+   "Number of RSUs" total and refuses to write on a mismatch. Re-running is **idempotent** — rows
+   for a grant are replaced (so status refreshes as tranches vest) and any `price_per_share` you
+   set on a vested tranche is preserved.
+
+4. **Delete the scaffold aggregate row** (the one with a blank `grant_id`) once real grants are
+   imported — the script warns you while it is still present, since it would double-count.
+
+`price_per_share` is left blank on import; supply the current price for unvested vests at prompt
+generation with `--rsu-price` (below), and backfill the actual FMV on vested rows when you know it.
+
+## Manual entry (alternative)
 
 1. In E\*TRADE (Stock Plan → **Holdings / Releases / Vesting Schedule**), read your unvested
    vest tranches: grant, vest date, shares.

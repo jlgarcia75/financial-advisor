@@ -283,6 +283,33 @@ def main() -> int:
         run([SCRIPTS / "validate_statement_csvs.py", cl_md])
         check(True, "central-lending CSVs validate against schemas/central-lending-capital-account")
 
+        print("[9] import_rsu_grants (grant notice MD -> rsu_vesting.csv)")
+        grants = root / "grants"
+        grants.mkdir()
+        # Flattened MarkItDown layout: labels/values pooled, then the schedule as a
+        # block of dates followed by a block of share counts. Total = 300.
+        (grants / "intc_20000001_rsu.md").write_text(
+            "INTEL CORPORATION\nNOTICE OF GRANT\n\nParticipant Name:\n\nJESUS GARCIA\n\n"
+            "Grant Number:\n\nGrant Date:\n\nNumber of RSUs:\n\nVesting Schedule:\n\n"
+            "20000001\n\nMay 30, 2023\n\n300 RSUs\n\nVesting Date\n\nRSUs\n\n"
+            "February 29, 2024\n\nNovember 30, 2026\n\nMay 30, 2027\n\n"
+            "100\n\n100\n\n100\n\nRetirement Vesting Acceleration:\n\nYes\n"
+        )
+        rsu_csv = grants / "rsu_vesting.csv"
+        run([SCRIPTS / "import_rsu_grants.py", grants / "intc_20000001_rsu.md",
+             "--csv", rsu_csv, "--today", "2026-07-23"])
+        rrows = list(csv.DictReader(rsu_csv.open()))
+        check(len(rrows) == 3 and {r["grant_id"] for r in rrows} == {"20000001"},
+              "3 tranches imported for the grant (checksum 300 passed)")
+        by_date = {r["vest_date"]: r for r in rrows}
+        check(by_date["2024-02-29"]["status"] == "vested", "past tranche marked vested")
+        check(by_date["2026-11-30"]["status"] == "unvested", "future tranche marked unvested")
+        check(by_date["2024-02-29"]["symbol"] == "INTC" and by_date["2024-02-29"]["grant_date"] == "2023-05-30",
+              "symbol from filename, grant_date parsed from notice")
+        run([SCRIPTS / "import_rsu_grants.py", grants / "intc_20000001_rsu.md",
+             "--csv", rsu_csv, "--today", "2026-07-23"])
+        check(len(list(csv.DictReader(rsu_csv.open()))) == 3, "re-import is idempotent (no duplicate rows)")
+
     print("\nSMOKE TEST PASSED")
     return 0
 
