@@ -225,8 +225,21 @@ def main() -> int:
              "total_tax": "45000", "effective_rate": "16.7%", "net_lt_cap_gain": "5000",
              "qualified_dividends": "3000", "niit": "1200", "source_doc": "2024_return.md"},
         ])
+        equity_dir = root / "equity_comp"
+        equity_dir.mkdir()
+        # One vested tranche (must be ignored) + two future unvested tranches; AAPL
+        # priced via --rsu-price override, INTC priced from the row.
+        write_csv(equity_dir / "rsu_vesting.csv", [
+            {"symbol": "INTC", "grant_id": "G2", "grant_date": "2023-05-01", "vest_date": "2025-05-01",
+             "shares": "500", "status": "vested", "price_per_share": "45.00", "source": "etrade", "notes": ""},
+            {"symbol": "INTC", "grant_id": "G1", "grant_date": "2024-11-15", "vest_date": "2026-11-15",
+             "shares": "1000", "status": "unvested", "price_per_share": "100.00", "source": "etrade", "notes": ""},
+            {"symbol": "AAPL", "grant_id": "G3", "grant_date": "2025-02-01", "vest_date": "2027-08-01",
+             "shares": "50", "status": "unvested", "price_per_share": "", "source": "etrade", "notes": ""},
+        ])
         run([SCRIPTS / "create_tax_strategy_prompt.py", "--inputs-dir", inputs,
-             "--reviews-dir", reviews, "--tax-profile", tax_profile, "--returns-dir", returns_dir])
+             "--reviews-dir", reviews, "--tax-profile", tax_profile, "--returns-dir", returns_dir,
+             "--equity-comp-dir", equity_dir, "--rsu-price", "AAPL=200"])
         tax_prompt = reviews / "2025_tax_strategy_prompt.md"
         check(tax_prompt.exists(), "tax strategy prompt written")
         text = tax_prompt.read_text()
@@ -237,6 +250,12 @@ def main() -> int:
         check("NOT AVAILABLE" in text, "tax prompt flags missing cost basis instead of fabricating")
         check("tax-deferred $200.00" in text,
               "note-less 401k inferred as tax_deferred (not left unspecified)")
+        check("EQUITY COMPENSATION — RSUs" in text and "| 2026 | INTC | 1,000 | $100,000.00 |" in text,
+              "RSU section projects future vest income by year (row price)")
+        check("| 2027 | AAPL | 50 | $10,000.00 |" in text,
+              "RSU --rsu-price override values the unpriced tranche")
+        check("| INTC | 500 |" not in text,
+              "already-vested RSU tranche excluded from projection")
 
         print("[8] extract_central_lending (capital-account statement type)")
         cl_md = statements / "2025-02_test-capital_statement.md"

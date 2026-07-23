@@ -30,6 +30,7 @@ DEFAULT_INPUTS_DIR = VAULT / "Reviews/inputs"
 DEFAULT_REVIEWS_DIR = VAULT / "Reviews"
 DEFAULT_TAX_PROFILE = VAULT / "tax_profile.md"
 DEFAULT_RETURNS_DIR = VAULT / "tax_returns"
+DEFAULT_EQUITY_COMP_DIR = VAULT / "equity_comp"
 
 RETURN_SUMMARY_COLS = [
     ("tax_year", "Year"), ("agi", "AGI"), ("taxable_income", "Taxable income"),
@@ -96,6 +97,79 @@ def returns_section(returns_dir: Path) -> str:
     return "\n".join(lines)
 
 
+def _fmt_shares(n: float) -> str:
+    return f"{n:,.0f}" if abs(n - round(n)) < 1e-9 else f"{n:,.4f}".rstrip("0").rstrip(".")
+
+
+def rsu_section(equity_dir: Path, price_overrides: dict[str, float]) -> str:
+    """Unvested RSUs: projected ordinary income by tax year (income only, no
+    withholding math). Future vests are valued at an assumed flat price
+    (price_per_share, overridable per symbol via --rsu-price); actual income is
+    the FMV on the real vest date, so figures are tagged [ASSUMPTION]/VERIFY."""
+    rows = [r for r in read_csv(equity_dir / "rsu_vesting.csv")
+            if (r.get("status", "").strip().lower() or "unvested") != "vested"]
+    if not rows:
+        return ("EQUITY COMPENSATION — RSUs\n- None tracked yet. See docs/rsu-tracker.md to add "
+                "equity_comp/rsu_vesting.csv (vest dates + shares) for projected vest income.")
+
+    # Aggregate by (tax_year, symbol); blank vest_date -> "Unscheduled".
+    by_bucket: dict[tuple[str, str], dict[str, float]] = {}
+    total_shares = total_value = 0.0
+    priced_symbols: dict[str, float] = {}
+    unpriced = False
+    for r in rows:
+        symbol = (first_value(r, ("symbol",)) or "").strip().upper()
+        shares = parse_number(first_value(r, ("shares",))) or 0.0
+        price = price_overrides.get(symbol)
+        if price is None:
+            price = parse_number(first_value(r, ("price_per_share",)))
+        year = str(first_value(r, ("vest_date",)) or "")[:4] or "Unscheduled"
+        bucket = by_bucket.setdefault((year, symbol), {"shares": 0.0, "value": 0.0, "priced": 1.0})
+        bucket["shares"] += shares
+        total_shares += shares
+        if price is not None:
+            bucket["value"] += shares * price
+            total_value += shares * price
+            priced_symbols[symbol] = price
+        else:
+            bucket["priced"] = 0.0
+            unpriced = True
+
+    price_note = "; ".join(f"{s} @ ${p:,.2f}" for s, p in sorted(priced_symbols.items()))
+    lines = ["EQUITY COMPENSATION — RSUs  [DATA — from equity_comp/rsu_vesting.csv]"]
+    lines.append(
+        f"- Unvested: {_fmt_shares(total_shares)} shares"
+        + (f" ≈ {money(round(total_value, 2))} projected ordinary income at vest"
+           f" (assumed price {price_note} — held flat [ASSUMPTION], VERIFY current price)"
+           if total_value else " (price per share not set — VERIFY)")
+    )
+    lines += ["- Projected vest income by tax year (added to W-2 wages at vest):",
+              "  | Tax year | Symbol | Shares vesting | Projected income |",
+              "  | --- | --- | --- | --- |"]
+    for (year, symbol), b in sorted(by_bucket.items()):
+        value = money(round(b["value"], 2)) if b["priced"] and b["value"] else "VERIFY (no price)"
+        lines.append(f"  | {year} | {symbol} | {_fmt_shares(b['shares'])} | {value} |")
+    if unpriced:
+        lines.append("  - Some tranches have no price_per_share — set it or pass --rsu-price SYMBOL=PRICE.")
+    lines.append("- RSU vesting is ordinary income that raises AGI/MAGI in the vest year — revisit "
+                 "withholding adequacy and the safe-harbor target for that year. [RULE]")
+    return "\n".join(lines)
+
+
+def parse_price_overrides(pairs) -> dict[str, float]:
+    """Parse repeated --rsu-price SYMBOL=PRICE args into {SYMBOL: price}."""
+    out: dict[str, float] = {}
+    for pair in pairs or []:
+        if "=" not in pair:
+            raise SystemExit(f"--rsu-price expects SYMBOL=PRICE, got {pair!r}")
+        sym, _, price = pair.partition("=")
+        value = parse_number(price)
+        if value is None:
+            raise SystemExit(f"--rsu-price price is not numeric: {pair!r}")
+        out[sym.strip().upper()] = value
+    return out
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate a data-grounded tax-strategy prompt.")
     parser.add_argument("--inputs-dir", type=Path, default=DEFAULT_INPUTS_DIR)
@@ -104,6 +178,10 @@ def main() -> int:
     parser.add_argument("--tax-year", help="Override the tax year (default: profile.tax_year or latest period).")
     parser.add_argument("--returns-dir", type=Path, default=DEFAULT_RETURNS_DIR,
                         help="Folder with redacted prior-year returns + tax_returns_summary.csv.")
+    parser.add_argument("--equity-comp-dir", type=Path, default=DEFAULT_EQUITY_COMP_DIR,
+                        help="Folder with rsu_vesting.csv for projected RSU vest income.")
+    parser.add_argument("--rsu-price", action="append", metavar="SYMBOL=PRICE",
+                        help="Override assumed price for a symbol's unvested RSUs (repeatable).")
     parser.add_argument("--out", type=Path, help="Output path (default: <reviews>/<year>_tax_strategy_prompt.md).")
     args = parser.parse_args()
 
@@ -153,6 +231,7 @@ def main() -> int:
     interest = sum_transactions(transactions, year, INTEREST)
     fees = sum_transactions(transactions, year, FEES)
     prior_returns = returns_section(args.returns_dir)
+    rsu_comp = rsu_section(args.equity_comp_dir, parse_price_overrides(args.rsu_price))
 
     prompt = f"""# {year} Tax Strategy — Advisor Prompt
 
@@ -201,6 +280,8 @@ tax-free {money(breakdown_value(breakdown, 'tax_treatment', 'tax_free'))}
   provide basis to enable tax-loss-harvesting and cap-gains analysis.
 - Inherited IRAs subject to the 10-year rule:
 {inherited_lines}
+
+{rsu_comp}
 
 {prior_returns}
 
