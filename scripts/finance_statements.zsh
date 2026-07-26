@@ -89,19 +89,15 @@ for md in "$STATEMENTS_DIR"/*_statement.md(N); do
 
   log "Processing ready statement: ${md:t}"
 
-  # Institution-specific extractor routing. Each branch sets the extractor plus the
-  # institution and statement_type used for the manifest.
-  extractor="" ; inst="" ; stype=""
-  if grep -Eiq '^institution:[[:space:]]*empower|Empower Monthly Report|provider_or_custodian:[[:space:]]*Pershing' "$md"; then
-    log "Detected Empower/Pershing statement"
-    extractor="extract_empower_statement.py" ; inst="empower" ; stype="multi_account_brokerage"
-  elif grep -Eiq '^institution:[[:space:]]*central-lending|Capital Account Statement|Central Florida Income Fund|Central Lending' "$md"; then
-    log "Detected Central Lending capital-account statement"
-    extractor="extract_central_lending.py" ; inst="central-lending" ; stype="central-lending-capital-account"
-  else
+  # Route via the statement-type registry (config/statement_types.yml). The resolver
+  # emits eval-able assignments for extractor, inst, stype, and schema_dir.
+  extractor="" ; inst="" ; stype="" ; schema_dir=""
+  if ! route="$("$PYTHON_BIN" "$REPO_DIR/scripts/resolve_statement_type.py" "$md" --format sh)"; then
     fail_file "$md" "No extractor route for this statement type"
     continue
   fi
+  eval "$route"
+  log "Routed to $extractor ($inst / $stype)"
 
   if [[ -f "$REPO_DIR/scripts/$extractor" ]]; then
     "$PYTHON_BIN" "$REPO_DIR/scripts/$extractor" "$md"
@@ -113,7 +109,7 @@ for md in "$STATEMENTS_DIR"/*_statement.md(N); do
   # 3) Validate CSVs if validator exists.
   if [[ -x "$REPO_DIR/scripts/validate_statement_csvs.py" ]]; then
     log "Validating CSVs for: ${md:t}"
-    "$PYTHON_BIN" "$REPO_DIR/scripts/validate_statement_csvs.py" "$md"
+    "$PYTHON_BIN" "$REPO_DIR/scripts/validate_statement_csvs.py" "$md" --schema-dir "$schema_dir"
   else
     log "No validate_statement_csvs.py found; skipping CSV validation"
   fi

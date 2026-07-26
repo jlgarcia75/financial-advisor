@@ -665,46 +665,45 @@ Use a repeatable onboarding process whenever you add a new institution, account,
 
 ### 16.1 Statement Type Registry
 
-Create a lightweight registry in the repo:
-
-```text
-financial-advisor/config/statement_types.yml
-```
-
-Example:
+Routing lives in one place: [`config/statement_types.yml`](../config/statement_types.yml). It is the
+single source of truth for which extractor parses a statement, which schema directory validates its
+CSVs, and the `institution` / `statement_type` stamped into its manifest. Each type is matched by an
+ordered list of case-insensitive `detect` regexes run against the statement Markdown (frontmatter and
+body) — content-based, not filename globs, so a mis-named file still routes correctly. Types are tried
+top-to-bottom; the first with any matching pattern wins, so list more specific types first.
 
 ```yaml
 statement_types:
-  empower_multi_account_brokerage:
-    institution: empower
-    statement_kind: multi_account_brokerage
-    filename_pattern: "YYYY-MM_empower-*-*_statement.pdf"
-    extractor: scripts/extractors/empower_multi_account.py
-    schemas:
-      manifest: schemas/empower/statement-manifest.schema.json
-      accounts: schemas/empower/accounts.schema.json
-      holdings: schemas/empower/holdings.schema.json
-      transactions: schemas/empower/transactions.schema.json
-      activity: schemas/empower/activity.schema.json
-    outputs:
-      - accounts
-      - holdings
-      - transactions
-      - activity
-
-  generic_credit_card:
-    statement_kind: credit_card
-    extractor: scripts/extractors/generic_credit_card.py
-    schemas:
-      manifest: schemas/credit_card/statement-manifest.schema.json
-      transactions: schemas/credit_card/transactions.schema.json
-      activity: schemas/credit_card/activity.schema.json
-    outputs:
-      - transactions
-      - activity
+  central_lending_capital_account:
+    extractor: extract_central_lending.py            # in scripts/
+    institution: central-lending
+    statement_type: central-lending-capital-account
+    schema_dir: central-lending-capital-account      # schemas/<schema_dir>/<dataset>.schema.json
+    detect:
+      - '^institution:\s*central-lending'
+      - 'Capital Account Statement'
+      - 'Central Florida Income Fund'
+    outputs: [accounts, activity, transactions]
 ```
 
-This registry lets automation determine which extractor and schemas to use based on the statement metadata and filename.
+`scripts/resolve_statement_type.py` reads this registry and resolves a statement to its route:
+
+```bash
+resolve_statement_type.py <statement>.md --format sh    # extractor / inst / stype / schema_dir
+resolve_statement_type.py <statement>.md --field extractor
+```
+
+Three consumers call it, so there is no routing logic to duplicate:
+
+- **`finance_statements.zsh`** routes each ready statement to its extractor and passes `schema_dir`
+  to the validator and `institution`/`statement_type` to the manifest builder.
+- **`validate_statement_csvs.py`** resolves `schema_dir` from the registry when `--schema-dir` is
+  not given (falls back to its legacy search if the registry/PyYAML is unavailable).
+- **`create_statement_manifest.py`** fills `institution`/`statement_type` from the registry when not
+  passed explicitly.
+
+**Adding a statement type is a YAML edit** — add a block here, drop its `extract_*.py` in `scripts/`
+and its schemas in `schemas/<schema_dir>/`; no changes to the orchestrator or the shared tools.
 
 ### 16.2 Standard Onboarding Checklist
 
