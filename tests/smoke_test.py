@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import csv
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -356,6 +357,30 @@ def main() -> int:
         check(man["institution"] == "central-lending"
               and man["statement_type"] == "central-lending-capital-account",
               "manifest resolves institution/statement_type from the registry without flags")
+
+        print("[11] build_advisor_briefing (briefing + safe upload bundle)")
+        # equity_comp/rsu_vesting.csv must live under the finance root for the finance-based
+        # bundle entries; step [9] wrote it under grants/, so place a copy at root/equity_comp.
+        (root / "equity_comp").mkdir(exist_ok=True)
+        shutil.copy(rsu_csv, root / "equity_comp" / "rsu_vesting.csv")
+        # A raw return (PII) exists in the fixture vault and must NOT reach the bundle.
+        assert (returns_dir / "2024_return.md").exists(), "fixture should have a raw return"
+        run([SCRIPTS / "build_advisor_briefing.py", "--finance-dir", root,
+             "--reviews-dir", reviews, "--inputs-dir", inputs, "--tax-profile", tax_profile])
+        briefing = (reviews / "ADVISOR_BRIEFING.md").read_text()
+        bundle = reviews / "advisor_bundle"
+        names = {p.name for p in bundle.iterdir()} if bundle.is_dir() else set()
+        check({"ADVISOR_BRIEFING.md", "project_instructions.md"} <= names,
+              "bundle contains the briefing + project instructions")
+        check({"NET_WORTH_snapshot.csv", "tax_returns_summary.csv", "rsu_vesting.csv",
+               "manual_statements_master_holdings.csv"} <= names,
+              "bundle includes Tier-1 aggregates and Tier-2 masters")
+        leaked = [n for n in names if n.endswith(("_return.md", "_statement.md", ".pdf", ".env"))]
+        check(not leaked, f"no raw returns/statements/PDFs reach the bundle (leaked: {leaked})")
+        check("grantor trust" in briefing.lower() and "§1014" in briefing,
+              "briefing carries the corrected grantor-trust guardrail")
+        check("Never upload" in briefing and "SSN" in briefing,
+              "briefing lists the do-not-upload PII set")
 
     print("\nSMOKE TEST PASSED")
     return 0

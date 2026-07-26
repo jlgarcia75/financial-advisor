@@ -129,6 +129,11 @@ def main() -> int:
          *period_args], "build dashboard")
     run([SCRIPTS / "create_monthly_review_prompt.py", "--inputs-dir", args.inputs_dir,
          "--reviews-dir", args.reviews_dir, *period_args], "create monthly review prompt")
+    # Regenerate the advisor briefing + safe ChatGPT upload bundle last, so it reflects
+    # the freshly rebuilt dashboard, prompts, and manifest.
+    run([SCRIPTS / "build_advisor_briefing.py", "--finance-dir", args.reviews_dir.parent,
+         "--reviews-dir", args.reviews_dir, "--inputs-dir", args.inputs_dir,
+         "--tax-profile", args.reviews_dir.parent / "tax_profile.md"], "build advisor briefing + bundle")
 
     print(f"\nDone. Combined view refreshed under {args.reviews_dir}")
     print("Review reconciliation before trusting totals: "
