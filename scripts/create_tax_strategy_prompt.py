@@ -24,6 +24,7 @@ from _finance_common import (  # noqa: E402
     read_csv,
     read_json,
 )
+from advisor_guardrails import GUARDRAILS  # noqa: E402
 
 VAULT = Path("/Users/jesusgarcia/ObsidianVaults/second-brain/91_finance")
 DEFAULT_INPUTS_DIR = VAULT / "Reviews/inputs"
@@ -251,11 +252,7 @@ TAX YEAR & GROUND RULES
   LTCG thresholds {profile_line(fm, 'ltcg_thresholds')}.
   If any constant is blank or looks wrong for {year} given your knowledge cutoff, state the
   value you assume and mark it "VERIFY" — never silently use stale numbers.
-- Tag every claim as [DATA] (from figures below), [ASSUMPTION] (yours, stated), or [RULE]
-  (a general tax rule to verify). Show the math for any dollar figure.
-- Rank recommendations by estimated after-tax $ impact AND deadline; call out hard deadlines.
-- Scope advice per entity/return; do not blend the personal return with the trust.
-- End with: (a) assumptions you made, and (b) the missing data that would most change your advice.
+{GUARDRAILS}
 
 HOUSEHOLD PROFILE
 - Filing status: {profile_line(fm, 'filing_status')}; State: {profile_line(fm, 'state')}; Dependents: {profile_line(fm, 'dependents')}
