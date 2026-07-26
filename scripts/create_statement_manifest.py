@@ -90,12 +90,17 @@ def create_manifest(md_path: Path, args) -> None:
 
     statement_id = fm.get("statement_id") or base.name
 
+    # Fill institution / statement_type from the registry when not passed explicitly
+    # (the zsh pipeline passes them; standalone runs resolve them here). Never raises.
+    from resolve_statement_type import try_resolve
+    route = try_resolve(md_path) or {}
+
     manifest = {
         "schema_version": args.schema_version,
         "statement_id": statement_id,
-        "institution": clean(args.institution or fm.get("institution"), "unknown"),
+        "institution": clean(args.institution or fm.get("institution"), route.get("institution") or "unknown"),
         "provider_or_custodian": fm.get("provider_or_custodian"),
-        "statement_type": clean(fm.get("statement_type"), args.statement_type),
+        "statement_type": clean(fm.get("statement_type"), args.statement_type or route.get("statement_type") or "unknown"),
         "source": fm.get("source", "manual_statement"),
         "source_files": {
             "pdf": fm.get("source_file", f"{statement_id}.pdf"),
@@ -136,7 +141,8 @@ def main():
     parser.add_argument("--all-ready", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--institution", default=None)
-    parser.add_argument("--statement-type", default="multi_account_brokerage")
+    parser.add_argument("--statement-type", default=None,
+                        help="Override statement_type; if omitted, resolved from the registry or frontmatter.")
     parser.add_argument("--schema-version", default="1.0")
     parser.add_argument("--no-stamp", action="store_true",
                         help="Do not backfill resolved metadata into the MD frontmatter.")

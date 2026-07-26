@@ -1,0 +1,37 @@
+# Registry of statement types the pipeline knows how to ingest.
+#
+# Single source of truth for routing: which extractor parses a statement, which
+# schema directory validates its CSVs, and the institution / statement_type stamped
+# into its manifest. Add a new statement type by adding a block here (plus its
+# extractor in scripts/ and schemas in schemas/<schema_dir>/) — no code changes.
+#
+# Detection: `detect` is an ordered list of case-insensitive regexes matched against
+# the statement Markdown (frontmatter + body). Types are tried top-to-bottom and the
+# first type with any matching pattern wins, so list more specific types first.
+#
+# Consumed by scripts/resolve_statement_type.py, which finance_statements.zsh,
+# validate_statement_csvs.py, and create_statement_manifest.py all call.
+
+statement_types:
+  empower_multi_account_brokerage:
+    extractor: extract_empower_statement.py
+    institution: empower
+    statement_type: multi_account_brokerage
+    schema_dir: empower
+    detect:
+      - '^institution:\s*empower'
+      - 'Empower Monthly Report'
+      - '^provider_or_custodian:\s*Pershing'
+    outputs: [accounts, holdings, transactions, activity]
+
+  central_lending_capital_account:
+    extractor: extract_central_lending.py
+    institution: central-lending
+    statement_type: central-lending-capital-account
+    schema_dir: central-lending-capital-account
+    detect:
+      - '^institution:\s*central-lending'
+      - 'Capital Account Statement'
+      - 'Central Florida Income Fund'
+      - 'Central Lending'
+    outputs: [accounts, activity, transactions]

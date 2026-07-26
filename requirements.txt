@@ -4,4 +4,4 @@
 
 markitdown        # PDF -> Markdown conversion (finance_statements.zsh)
 jsonschema        # bootstrap_statement_type.py schema tooling
-PyYAML            # extract-statement-style frontmatter parsing (if used)
+PyYAML            # statement-type registry (config/statement_types.yml routing)

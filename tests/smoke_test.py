@@ -334,6 +334,29 @@ def main() -> int:
         check(trows["2026-05-31"]["grant_date"] == "2026-03-01",
               "tagged template: grant_date parsed from pre-schedule date")
 
+        print("[10] resolve_statement_type (registry-driven routing)")
+        r = run([SCRIPTS / "resolve_statement_type.py", cl_md, "--format", "json"])
+        route = json.loads(r.stdout)
+        check(route["extractor"] == "extract_central_lending.py"
+              and route["schema_dir"] == "central-lending-capital-account"
+              and route["institution"] == "central-lending",
+              "registry routes the capital-account statement by content")
+        emp_md = statements / "2099-01_test-empower_statement.md"
+        emp_md.write_text("---\ninstitution: empower\nstatement_type: unknown\n---\n\nEmpower Monthly Report\n")
+        check(run([SCRIPTS / "resolve_statement_type.py", emp_md, "--field", "schema_dir"]).stdout.strip() == "empower",
+              "registry routes an Empower statement to schemas/empower")
+        unknown_md = statements / "2099-02_test-mystery_statement.md"
+        unknown_md.write_text("---\ntype: financial_statement\n---\n\nUnrecognized bank e-statement\n")
+        rc = subprocess.run([sys.executable, str(SCRIPTS / "resolve_statement_type.py"), str(unknown_md)],
+                            capture_output=True, text=True)
+        check(rc.returncode == 1, "registry exits non-zero when no statement type matches")
+        # Standalone manifest picks institution/statement_type from the registry (no --flags).
+        run([SCRIPTS / "create_statement_manifest.py", cl_md, "--overwrite", "--no-stamp"])
+        man = json.loads((cl_md.with_suffix(".json")).read_text())
+        check(man["institution"] == "central-lending"
+              and man["statement_type"] == "central-lending-capital-account",
+              "manifest resolves institution/statement_type from the registry without flags")
+
     print("\nSMOKE TEST PASSED")
     return 0
 

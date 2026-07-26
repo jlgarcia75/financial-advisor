@@ -134,6 +134,16 @@ def main():
     statement_type = fm.get("statement_type", "empower-brokerage")
     base = md_path.with_suffix("")
 
+    # Prefer an explicit --schema-dir; otherwise consult the statement-type registry
+    # so standalone runs route to the same schemas the pipeline uses. Falls back to
+    # the statement_type / empower search in load_schema if the registry is absent.
+    schema_dir = args.schema_dir
+    if not schema_dir:
+        from resolve_statement_type import try_resolve
+        route = try_resolve(md_path)
+        if route:
+            schema_dir = route.get("schema_dir") or None
+
     all_errors = []
 
     for dataset in SCHEMA_MAP:
@@ -141,7 +151,7 @@ def main():
         if not csv_path.exists():
             continue
 
-        schema = load_schema(statement_type, dataset, schema_dir=args.schema_dir)
+        schema = load_schema(statement_type, dataset, schema_dir=schema_dir)
         all_errors.extend(validate_csv(csv_path, schema))
 
     if all_errors:
