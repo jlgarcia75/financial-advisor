@@ -212,14 +212,41 @@ def bullet_block(title: str, items: list[str]) -> str:
     return "\n".join([f"## {title}", ""] + [f"- {it}" for it in items])
 
 
+def account_coverage(reviews_dir: Path, inputs_dir: Path) -> tuple[list[str], list[str], int, str]:
+    """(manual institutions, linked institutions, total included accounts, linked as-of)."""
+    incl = [r for r in read_csv(reviews_dir / "NET_WORTH_snapshot.csv")
+            if str(r.get("included_in_networth", "")).lower() == "true"]
+
+    def insts(source: str) -> list[str]:
+        return sorted({r.get("institution", "").strip() for r in incl
+                       if r.get("source") == source and r.get("institution", "").strip()})
+
+    linked_rows = read_csv(inputs_dir / "linked_accounts.csv")
+    asof = max((str(r.get("as_of_date", "")) for r in linked_rows if r.get("as_of_date")), default="")
+    return insts("manual_statement"), insts("linked"), len(incl), asof
+
+
+def coverage_section(manual: list[str], linked: list[str], total: int, asof: str) -> str:
+    return "\n".join([
+        "## Account coverage — everything is included  [DATA]",
+        "",
+        f"All **{total}** accounts are merged into net worth, allocation, and cash flow:",
+        f"- **Manually ingested** (from statements): {', '.join(manual) or '—'}.",
+        f"- **Plaid-linked** (from the monthly export, as of **{asof or '—'}**): "
+        f"{', '.join(linked) or '—'}.",
+        "",
+        "Linked accounts are already counted **once** here. If you (ChatGPT) also have a live Plaid "
+        "connection, treat this bundle as authoritative for all totals and use live Plaid only to "
+        "flag what changed since the as-of date — never re-add a linked account or recompute net "
+        "worth from Plaid. A Plaid-linked account **not** listed above is a coverage gap: flag it "
+        "for the next export rather than silently adding it.",
+    ])
+
+
 def build_briefing(finance_dir: Path, reviews_dir: Path, inputs_dir: Path, manifest: dict,
                    fm: dict, period: str, bundle_files: list[str]) -> str:
     gen = datetime.now(timezone.utc).date().isoformat()
-    linked_asof = ""
-    linked = read_csv(inputs_dir / "linked_accounts.csv")
-    if linked:
-        dates = [str(r.get("as_of_date", "")) for r in linked if r.get("as_of_date")]
-        linked_asof = max(dates) if dates else ""
+    manual_i, linked_i, total_acc, linked_asof = account_coverage(reviews_dir, inputs_dir)
 
     return "\n".join([
         "# Household Financial Advisor — Briefing",
@@ -237,6 +264,8 @@ def build_briefing(finance_dir: Path, reviews_dir: Path, inputs_dir: Path, manif
         "these dates, say so rather than guessing; ask for a refreshed bundle.",
         "",
         snapshot_section(finance_dir, reviews_dir, fm),
+        "",
+        coverage_section(manual_i, linked_i, total_acc, linked_asof),
         "",
         "## How to use this in ChatGPT",
         "",
@@ -267,16 +296,30 @@ def build_briefing(finance_dir: Path, reviews_dir: Path, inputs_dir: Path, manif
     ])
 
 
-def build_instructions(period: str) -> str:
+def build_instructions(period: str, linked: list[str], asof: str) -> str:
+    linked_list = ", ".join(linked) or "the linked institutions in linked_accounts.csv"
     return "\n".join([
         "# ChatGPT Project — Custom Instructions",
         "",
-        "You are our household's financial-advisor analyst. All data is in the Project's uploaded "
-        "files; `ADVISOR_BRIEFING.md` is the index and headline snapshot. You are not filing "
-        "returns or giving legal advice — be concrete and quantitative, but flag uncertainty.",
+        "You are our household's financial-advisor analyst. The uploaded bundle is your authoritative "
+        "data; `ADVISOR_BRIEFING.md` is the index and headline snapshot. You are not filing returns "
+        "or giving legal advice — be concrete and quantitative, but flag uncertainty.",
         "",
         f"Data is a static snapshot as of **{period}** (and the dates in `advisor_inputs_manifest.json`). "
         "If a question reaches past those dates, say so and ask for a refreshed bundle.",
+        "",
+        "Account coverage & live Plaid (avoid double-counting):",
+        "- The bundle is the authoritative, reconciled source for ALL accounts — both manually "
+        "ingested (Empower/Pershing, Central Lending) and Plaid-linked. Net worth, allocation, and "
+        "cash-flow totals are pre-computed from it; use those numbers.",
+        f"- The snapshot already includes the Plaid-linked accounts ({linked_list}), as of "
+        f"**{asof or 'the linked as-of date'}**. They are counted once.",
+        "- If you also have a live Plaid connection, use it ONLY to flag what changed since that "
+        "as-of date (new/closed accounts, large balance moves, recent transactions). NEVER add live "
+        "Plaid balances to the pre-computed totals or count a linked account twice.",
+        "- If live Plaid and the snapshot disagree, report the delta and recommend refreshing the "
+        "bundle — do not silently blend them. If a Plaid account isn't in the snapshot, flag it as a "
+        "coverage gap for the next export.",
         "",
         "Ground rules:",
         GUARDRAILS,
@@ -339,7 +382,9 @@ def main() -> int:
     # Canonical copy in Reviews/, plus a copy inside the bundle as file #1.
     (args.reviews_dir / "ADVISOR_BRIEFING.md").write_text(briefing, encoding="utf-8")
     (bundle_dir / "ADVISOR_BRIEFING.md").write_text(briefing, encoding="utf-8")
-    (bundle_dir / "project_instructions.md").write_text(build_instructions(period), encoding="utf-8")
+    _, linked_i, _, linked_asof = account_coverage(args.reviews_dir, args.inputs_dir)
+    (bundle_dir / "project_instructions.md").write_text(
+        build_instructions(period, linked_i, linked_asof), encoding="utf-8")
 
     print(f"Wrote {args.reviews_dir / 'ADVISOR_BRIEFING.md'}")
     print(f"Assembled {bundle_dir} with {len(bundled)} data file(s) + briefing + instructions")

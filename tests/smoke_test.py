@@ -381,6 +381,11 @@ def main() -> int:
               "briefing carries the corrected grantor-trust guardrail")
         check("Never upload" in briefing and "SSN" in briefing,
               "briefing lists the do-not-upload PII set")
+        instructions = (bundle / "project_instructions.md").read_text()
+        check("Account coverage" in briefing and "counted **once**" in briefing,
+              "briefing states all manual + linked accounts are merged and counted once")
+        check("live Plaid" in instructions and "count a linked account twice" in instructions,
+              "instructions warn against double-counting live Plaid against the snapshot")
 
     print("\nSMOKE TEST PASSED")
     return 0
