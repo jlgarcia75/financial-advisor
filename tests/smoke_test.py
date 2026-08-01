@@ -387,6 +387,53 @@ def main() -> int:
         check("live Plaid" in instructions and "count a linked account twice" in instructions,
               "instructions warn against double-counting live Plaid against the snapshot")
 
+        print("[12] import_unrealized_gl + cost basis in tax prompt & bundle")
+        sys.path.insert(0, str(SCRIPTS))
+        import import_unrealized_gl as ugl
+        header = ["Asset Category", "Security Description", "Security Type", "Quantity", "Unit Cost",
+                  "Current Total Cost", "Market Value", "Gain/Loss", "Gain/Loss %", "Term",
+                  "Trade Date", "Taxlot ID", "Covered/NonCovered", "Symbol", "Security Identifier"]
+        meta = {"Account": "QFA339398", "As Of": "Jul 30, 2026 8:14 PM EDT",
+                "Net Unrealized Gain/loss": "1,500.00"}
+        data = [
+            # security-level rollup (no Taxlot ID) — must be skipped, not double-counted
+            ("Large Growth", "NVDA CORP", "Common Stocks", 20, None, 77, 4077, 4000, "", "long",
+             "Multiple", "", "Covered", "NVDA", "NVDA"),
+            ("Large Growth", "NVDA CORP", "Common Stocks", 10, 3.87, 38.71, 2038.71, 2000.00, "",
+             "long", "2019-05-21 00:00:00", "LOT1", "Covered", "NVDA", "NVDA"),
+            ("Large Value", "XYZ INC", "Common Stocks", 5, 100, 500, 0.0, -500.00, "", "short",
+             "2026-01-15 00:00:00", "LOT2", "Covered", "XYZ", "XYZ"),
+        ]
+        lots = ugl.build_lots(meta, header, data, meta["Account"])
+        check(len(lots) == 2 and {r["taxlot_id"] for r in lots} == {"LOT1", "LOT2"},
+              "rollup row (no Taxlot ID) skipped; only real lots kept")
+        check(lots[0]["as_of_date"] == "2026-07-30", "as-of parsed from 'Mon DD, YYYY ...' preamble")
+        ugl.verify(meta, lots)  # 2000 - 500 == 1500, should not raise
+        try:
+            ugl.verify({"Net Unrealized Gain/loss": "999"}, lots)
+            raised = False
+        except SystemExit:
+            raised = True
+        check(raised, "checksum aborts when lot sum != report's Net Unrealized")
+
+        write_csv(inputs / "cost_basis_QFA339398.csv", [
+            {"account_id": "QFA339398", "as_of_date": "2026-07-30", "symbol": "NVDA", "term": "long",
+             "cost_basis": "38.71", "market_value": "2038.71", "gain_loss": "2000.00"},
+            {"account_id": "QFA339398", "as_of_date": "2026-07-30", "symbol": "XYZ", "term": "short",
+             "cost_basis": "500", "market_value": "0", "gain_loss": "-500.00"},
+        ])
+        run([SCRIPTS / "create_tax_strategy_prompt.py", "--inputs-dir", inputs,
+             "--reviews-dir", reviews, "--tax-profile", tax_profile, "--returns-dir", returns_dir])
+        tptext = (reviews / "2025_tax_strategy_prompt.md").read_text()
+        check("Cost basis & unrealized gains" in tptext and "NOT AVAILABLE" not in tptext,
+              "tax prompt shows the cost-basis section instead of 'NOT AVAILABLE'")
+        check("§1014" in tptext and "harvest the losses, not the gains" in tptext,
+              "cost-basis section carries the revocable-trust step-up guidance")
+        run([SCRIPTS / "build_advisor_briefing.py", "--finance-dir", root,
+             "--reviews-dir", reviews, "--inputs-dir", inputs, "--tax-profile", tax_profile])
+        names = {p.name for p in (reviews / "advisor_bundle").iterdir()}
+        check("cost_basis_QFA339398.csv" in names, "normalized cost-basis CSV is bundled (Tier 2)")
+
     print("\nSMOKE TEST PASSED")
     return 0
 

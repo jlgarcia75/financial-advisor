@@ -1,0 +1,21 @@
+{
+  "fields": [
+    {"name": "account_id", "type": "string", "constraints": {"required": true}},
+    {"name": "as_of_date", "type": "date"},
+    {"name": "asset_category", "type": "string"},
+    {"name": "symbol", "type": "string"},
+    {"name": "security_description", "type": "string"},
+    {"name": "security_type", "type": "string"},
+    {"name": "quantity", "type": "number"},
+    {"name": "unit_cost", "type": "number"},
+    {"name": "cost_basis", "type": "number"},
+    {"name": "market_value", "type": "number"},
+    {"name": "gain_loss", "type": "number"},
+    {"name": "gain_loss_pct", "type": "number"},
+    {"name": "term", "type": "string"},
+    {"name": "trade_date", "type": "date"},
+    {"name": "taxlot_id", "type": "string", "constraints": {"required": true}},
+    {"name": "covered", "type": "string"}
+  ],
+  "missingValues": [""]
+}

@@ -53,9 +53,13 @@ BUNDLE = [
     ("inputs", "linked_accounts.csv"),
     ("inputs", "linked_holdings.csv"),
     ("inputs", "linked_transactions.csv"),
+    ("inputs", "cost_basis_QFA339398.csv"),
 ]
-# Defense in depth: refuse to bundle anything whose name looks like raw PII.
-FORBIDDEN = ("_return.md", "_statement.md", "_statement.pdf", ".env")
+# Defense in depth: refuse to bundle raw PII or raw broker exports. The normalized
+# cost-basis CSV (cost_basis_*.csv) is fine; the raw export (*_unrealized-gl.csv,
+# an .xlsx) is not.
+FORBIDDEN = ("_return.md", "_statement.md", "_statement.pdf", ".env",
+             "unrealized-gl.csv", ".xlsx")
 
 WHAT = {
     "NET_WORTH_snapshot.csv": "Per-account balances, dedup'd; authoritative for net worth & per-account values",
@@ -74,6 +78,7 @@ WHAT = {
     "linked_accounts.csv": "ChatGPT-linked account balances (Chase, Fidelity, SoFi, Citi, etc.)",
     "linked_holdings.csv": "Linked brokerage/retirement positions",
     "linked_transactions.csv": "Linked account transactions",
+    "cost_basis_QFA339398.csv": "Per-tax-lot cost basis + unrealized gain/loss for the trust brokerage (enables harvesting analysis)",
 }
 
 RECURRING_QUESTIONS = [

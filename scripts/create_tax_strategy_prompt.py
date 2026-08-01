@@ -171,6 +171,44 @@ def parse_price_overrides(pairs) -> dict[str, float]:
     return out
 
 
+def cost_basis_section(inputs_dir: Path) -> str:
+    """Unrealized gains + cost basis from the Empower Unrealized Gain Loss import,
+    if present — net, ST/LT gain/loss split, harvestable losses, and the revocable-
+    trust step-up flag. Degrades to the 'no cost basis' note when no file exists."""
+    rows = []
+    for path in sorted(inputs_dir.glob("cost_basis_*.csv")):
+        rows += read_csv(path)
+    if not rows:
+        return ("- Realized gains/losses: NOT AVAILABLE — the pipeline has no cost basis. Attach a "
+                "1099-B or provide basis to enable tax-loss-harvesting and cap-gains analysis.")
+
+    def gl(r) -> float:
+        return parse_number(r.get("gain_loss")) or 0.0
+
+    net = sum(gl(r) for r in rows)
+    ltg = sum(gl(r) for r in rows if gl(r) > 0 and r.get("term") == "long")
+    stg = sum(gl(r) for r in rows if gl(r) > 0 and r.get("term") == "short")
+    ltl = sum(gl(r) for r in rows if gl(r) < 0 and r.get("term") == "long")
+    stl = sum(gl(r) for r in rows if gl(r) < 0 and r.get("term") == "short")
+    mv = sum(parse_number(r.get("market_value")) or 0.0 for r in rows)
+    cost = sum(parse_number(r.get("cost_basis")) or 0.0 for r in rows)
+    asof = max((r.get("as_of_date", "") for r in rows), default="")
+    accts = ", ".join(sorted({r.get("account_id", "") for r in rows if r.get("account_id")}))
+    tops = "; ".join(f"{r.get('symbol', '?')} ({r.get('term', '?')}) {money(gl(r))}"
+                     for r in sorted((r for r in rows if gl(r) < 0), key=gl)[:5])
+    return "\n".join([
+        f"- Cost basis & unrealized gains  [DATA — Empower Unrealized Gain Loss, as of {asof}; {accts}]:",
+        f"  net unrealized {money(net)} across {len(rows)} lots; market value {money(mv)} vs cost {money(cost)}.",
+        f"  Gains: long-term {money(ltg)}, short-term {money(stg)}. "
+        f"Losses: long-term {money(ltl)}, short-term {money(stl)}.",
+        f"  - Harvestable losses total {money(ltl + stl)} — use to offset realized gains (and up to "
+        f"$3,000 ordinary), pairing with the capital-loss carryover above. Top candidates: {tops or 'none'}.",
+        "  - The large embedded LONG-term gains sit in the revocable Garcia Family Trust, whose assets "
+        "get a §1014 basis step-up at death — so holding low-basis lots generally beats realizing the "
+        "gains; harvest the losses, not the gains. [RULE]",
+    ])
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate a data-grounded tax-strategy prompt.")
     parser.add_argument("--inputs-dir", type=Path, default=DEFAULT_INPUTS_DIR)
@@ -233,6 +271,7 @@ def main() -> int:
     fees = sum_transactions(transactions, year, FEES)
     prior_returns = returns_section(args.returns_dir)
     rsu_comp = rsu_section(args.equity_comp_dir, parse_price_overrides(args.rsu_price))
+    cost_basis_block = cost_basis_section(args.inputs_dir)
 
     prompt = f"""# {year} Tax Strategy — Advisor Prompt
 
@@ -273,8 +312,7 @@ tax-free {money(breakdown_value(breakdown, 'tax_treatment', 'tax_free'))}
 - Allocation by asset class:
 {asset_lines}
 - YTD from processed statements only: dividends {money(dividends)}, interest {money(interest)}, fees {money(fees)}
-- Realized gains/losses: NOT AVAILABLE — the pipeline has no cost basis. Attach a 1099-B or
-  provide basis to enable tax-loss-harvesting and cap-gains analysis.
+{cost_basis_block}
 - Inherited IRAs subject to the 10-year rule:
 {inherited_lines}
 
