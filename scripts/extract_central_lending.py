@@ -78,7 +78,16 @@ def extract_meta(text: str) -> dict:
     return {"as_of_date": as_of, "fund": fund, "investor": investor}
 
 
+def account_identity(meta) -> tuple[str, str]:
+    """Stable (account_id, account_name) for this capital account — a single LP
+    interest — so every accounts/activity/transactions row shares one identity."""
+    account_id = normalize_text(meta["fund"]).replace(" ", "-") or "central-lending-capital-account"
+    account_name = meta["fund"] or "Central Lending Capital Account"
+    return account_id, account_name
+
+
 def extract_accounts(text, lines, statement_id, meta) -> list[dict]:
+    account_id, account_name = account_identity(meta)
     def rf_current(label):
         row = find_row(lines, label)
         vals = money_cells(row) if row else []
@@ -97,8 +106,8 @@ def extract_accounts(text, lines, statement_id, meta) -> list[dict]:
 
     return [{
         "statement_id": statement_id,
-        "account_id": normalize_text(meta["fund"]).replace(" ", "-") or "central-lending-capital-account",
-        "account_name": meta["fund"] or "Central Lending Capital Account",
+        "account_id": account_id,
+        "account_name": account_name,
         "account_type": "capital_account",
         "institution": "central-lending",
         "investor": meta["investor"],
@@ -113,7 +122,7 @@ def extract_accounts(text, lines, statement_id, meta) -> list[dict]:
     }]
 
 
-def extract_activity(lines, statement_id) -> list[dict]:
+def extract_activity(lines, statement_id, account_id, account_name) -> list[dict]:
     rows = []
     for label in ROLLFORWARD:
         row = find_row(lines, label)
@@ -121,7 +130,8 @@ def extract_activity(lines, statement_id) -> list[dict]:
             continue
         vals = money_cells(row)
         for value, basis in zip(vals, ("current_period", "inception_to_date")):
-            rows.append({"statement_id": statement_id, "metric": label, "value": value,
+            rows.append({"statement_id": statement_id, "account_id": account_id,
+                         "account_name": account_name, "metric": label, "value": value,
                          "basis": basis, "source_section": "Capital Account"})
     pnl = {
         "Profit & Loss current": "current_period",
@@ -131,13 +141,14 @@ def extract_activity(lines, statement_id) -> list[dict]:
     for label, basis in pnl.items():
         row = find_row(lines, label)
         if row and money_cells(row):
-            rows.append({"statement_id": statement_id, "metric": "Profit & Loss",
+            rows.append({"statement_id": statement_id, "account_id": account_id,
+                         "account_name": account_name, "metric": "Profit & Loss",
                          "value": money_cells(row)[0], "basis": basis,
                          "source_section": "Profit & Loss Summary"})
     return rows
 
 
-def extract_transactions(text, statement_id) -> list[dict]:
+def extract_transactions(text, statement_id, account_id, account_name) -> list[dict]:
     section = text.split("Transactions", 1)
     body = section[1] if len(section) > 1 else ""
     rows, seen = [], set()
@@ -170,7 +181,8 @@ def extract_transactions(text, statement_id) -> list[dict]:
         if key in seen:
             continue
         seen.add(key)
-        rows.append({"statement_id": statement_id, "date": date, "transaction_type": txn_type,
+        rows.append({"statement_id": statement_id, "account_id": account_id,
+                     "account_name": account_name, "date": date, "transaction_type": txn_type,
                      "description": desc, "amount": amount, "source_section": "Transactions"})
     return rows
 
@@ -187,9 +199,10 @@ def main() -> int:
     lines = text.splitlines()
     meta = extract_meta(text)
 
+    account_id, account_name = account_identity(meta)
     accounts = extract_accounts(text, lines, statement_id, meta)
-    activity = extract_activity(lines, statement_id)
-    transactions = extract_transactions(text, statement_id)
+    activity = extract_activity(lines, statement_id, account_id, account_name)
+    transactions = extract_transactions(text, statement_id, account_id, account_name)
 
     out_dir = args.out_dir or args.statement_md.parent
     base = out_dir / args.statement_md.with_suffix("").name

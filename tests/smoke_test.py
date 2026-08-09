@@ -281,6 +281,8 @@ def main() -> int:
         check(float(acc[0]["ownership_pct"]) == 2.5, "capital-account ownership parsed (2.5%)")
         tx = list(csv.DictReader((statements / "2025-02_test-capital_statement_transactions.csv").open()))
         check(len(tx) == 1 and float(tx[0]["amount"]) == 50.0, "capital-account transaction parsed")
+        check(tx[0].get("account_id") == "test-income-fund",
+              "capital-account transaction carries account_id (reconciles in the masters)")
         run([SCRIPTS / "validate_statement_csvs.py", cl_md])
         check(True, "central-lending CSVs validate against schemas/central-lending-capital-account")
 
