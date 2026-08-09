@@ -12,9 +12,26 @@ fi
 : "${FINANCE_DIR:=$VAULT/91_finance}"
 : "${STATEMENTS_DIR:=$FINANCE_DIR/Statements}"
 : "${MARKITDOWN_BIN:=/Users/jesusgarcia/.venv/bin/markitdown}"
-: "${PYTHON_BIN:=python3}"
+# Default the interpreter to the same venv markitdown lives in — it has the pipeline
+# deps (PyYAML for statement-type routing, openpyxl for cost-basis import). Under the
+# LaunchAgent's minimal PATH a bare `python3` is the system Python without them.
+if [[ -z "${PYTHON_BIN:-}" ]]; then
+  if [[ -x "${MARKITDOWN_BIN:h}/python3" ]]; then
+    PYTHON_BIN="${MARKITDOWN_BIN:h}/python3"
+  else
+    PYTHON_BIN="python3"
+  fi
+fi
 
 mkdir -p "$STATEMENTS_DIR" "$REPO_DIR/logs"
+
+# Preflight: fail early with an actionable message if the interpreter is missing a
+# required dep, rather than mid-run inside a routing/extract step.
+if ! "$PYTHON_BIN" -c 'import yaml' 2>/dev/null; then
+  log "PYTHON_BIN ($PYTHON_BIN) can't import PyYAML — set PYTHON_BIN in .env to a venv " \
+      "that has the deps (pip install -r requirements.txt), e.g. ${MARKITDOWN_BIN:h}/python3" >&2
+  exit 1
+fi
 
 log() {
   print -r -- "[finance_statements] $(date -u +%Y-%m-%dT%H:%M:%SZ) $*"
