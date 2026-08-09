@@ -1,10 +1,41 @@
 {
   "fields": [
-    {"name": "statement_id", "type": "string", "constraints": {"required": true}},
-    {"name": "metric", "type": "string", "constraints": {"required": true}},
-    {"name": "value", "type": "number"},
-    {"name": "basis", "type": "string"},
-    {"name": "source_section", "type": "string"}
+    {
+      "name": "statement_id",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "account_id",
+      "type": "string"
+    },
+    {
+      "name": "account_name",
+      "type": "string"
+    },
+    {
+      "name": "metric",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "value",
+      "type": "number"
+    },
+    {
+      "name": "basis",
+      "type": "string"
+    },
+    {
+      "name": "source_section",
+      "type": "string"
+    }
   ],
-  "missingValues": [""]
+  "missingValues": [
+    ""
+  ]
 }

@@ -1,11 +1,42 @@
 {
   "fields": [
-    {"name": "statement_id", "type": "string", "constraints": {"required": true}},
-    {"name": "date", "type": "date"},
-    {"name": "transaction_type", "type": "string"},
-    {"name": "description", "type": "string"},
-    {"name": "amount", "type": "number"},
-    {"name": "source_section", "type": "string"}
+    {
+      "name": "statement_id",
+      "type": "string",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "account_id",
+      "type": "string"
+    },
+    {
+      "name": "account_name",
+      "type": "string"
+    },
+    {
+      "name": "date",
+      "type": "date"
+    },
+    {
+      "name": "transaction_type",
+      "type": "string"
+    },
+    {
+      "name": "description",
+      "type": "string"
+    },
+    {
+      "name": "amount",
+      "type": "number"
+    },
+    {
+      "name": "source_section",
+      "type": "string"
+    }
   ],
-  "missingValues": [""]
+  "missingValues": [
+    ""
+  ]
 }
