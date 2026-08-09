@@ -18,13 +18,15 @@ It prints the path to the fresh `YYYY-MM_monthly_review_prompt.md` and the `advi
 
 ```bash
 # 1. Drop new statement PDFs into 91_finance/Statements/ and set each to status: ready.
-# 2. Run the ChatGPT linked-account export (docs/linked-account-export.md); save the 3 CSVs.
+# 2. Run the ChatGPT linked-account export (docs/linked-account-export.md); save the 3 CSVs
+#    into 91_finance/Reviews/inputs/.
 # 3. One command:
-scripts/monthly_review.zsh --source ~/Downloads/linked   # or no --source to reuse inputs/
+scripts/monthly_review.zsh
 # 4. Paste the printed monthly_review_prompt.md into your ChatGPT Project and upload the bundle.
 ```
 
-Flags: `--source DIR` copies a fresh linked export first; `--no-archive` skips the archive step.
+Flags: `--source <dir>` — only if you saved the CSVs somewhere other than `Reviews/inputs/`;
+it copies them in first. `--no-archive` skips the archive step.
 
 The interpreter comes from `PYTHON_BIN` (defaults to the venv `markitdown` uses), so it has the
 deps. See `config/local.example.env`.

@@ -87,15 +87,15 @@ Copy each code block into the matching file in `Reviews/inputs/`.
    archives the previous month. It prints the review prompt to paste:
 
    ```bash
-   scripts/monthly_review.zsh                        # CSVs already in Reviews/inputs/
-   scripts/monthly_review.zsh --source ~/Downloads/linked   # copy a fresh export first
+   scripts/monthly_review.zsh          # reads the CSVs you saved in Reviews/inputs/ (step 2)
    ```
 
-   See [monthly-review.md](monthly-review.md) for the full ritual. If you *only* refreshed linked
-   data (no new statements, no archiving), you can run just the linked half instead:
+   See [monthly-review.md](monthly-review.md) for the full ritual. Add `--source <dir>` only if you
+   saved the CSVs somewhere other than `Reviews/inputs/` (it copies them in first). If you *only*
+   refreshed linked data (no new statements, no archiving), run just the linked half instead:
 
    ```bash
-   python3 scripts/ingest_linked_export.py [--source ~/Downloads/linked]
+   python3 scripts/ingest_linked_export.py
    ```
 
 4. Review `Reviews/YYYY-MM_reconciliation_review.md` and resolve any `needs_review` accounts.

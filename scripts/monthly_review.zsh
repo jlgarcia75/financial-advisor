@@ -4,9 +4,9 @@
 # then archive superseded prior-month artifacts. Prints the review prompt to paste.
 #
 # Usage:
-#   scripts/monthly_review.zsh                      # use the linked CSVs already in inputs/
-#   scripts/monthly_review.zsh --source ~/Downloads/linked   # copy a fresh linked export first
-#   scripts/monthly_review.zsh --no-archive         # skip the archive step
+#   scripts/monthly_review.zsh                # use the linked CSVs already in Reviews/inputs/
+#   scripts/monthly_review.zsh --source <dir> # only if you saved the CSVs elsewhere; copy in first
+#   scripts/monthly_review.zsh --no-archive   # skip the archive step
 set -euo pipefail
 
 REPO_DIR="${0:A:h:h}"

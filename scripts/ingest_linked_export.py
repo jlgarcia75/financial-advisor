@@ -14,9 +14,9 @@ Typical use after pasting the CSVs into Reviews/inputs/:
 
     python3 scripts/ingest_linked_export.py
 
-Or point at wherever you saved them and have them copied into place first:
+Or, only if you saved them somewhere other than Reviews/inputs/, copy them in first:
 
-    python3 scripts/ingest_linked_export.py --source ~/Downloads/linked
+    python3 scripts/ingest_linked_export.py --source <dir>
 """
 from __future__ import annotations
 
