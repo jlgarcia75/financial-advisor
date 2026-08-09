@@ -87,7 +87,7 @@ Copy each code block into the matching file in `Reviews/inputs/`.
    archives the previous month. It prints the review prompt to paste:
 
    ```bash
-   scripts/monthly_review.zsh          # reads the CSVs you saved in Reviews/inputs/ (step 2)
+   python3 scripts/monthly_review.py   # reads the CSVs you saved in Reviews/inputs/ (step 2)
    ```
 
    See [monthly-review.md](monthly-review.md) for the full ritual. Add `--source <dir>` only if you
