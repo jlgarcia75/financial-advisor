@@ -1,6 +1,6 @@
 # Monthly Review (one command)
 
-`scripts/monthly_review.zsh` runs the whole monthly chain so the only thing left to do is paste
+`scripts/monthly_review.py` runs the whole monthly chain so the only thing left to do is paste
 the generated prompt into ChatGPT.
 
 ## What it does
@@ -21,7 +21,7 @@ It prints the path to the fresh `YYYY-MM_monthly_review_prompt.md` and the `advi
 # 2. Run the ChatGPT linked-account export (docs/linked-account-export.md); save the 3 CSVs
 #    into 91_finance/Reviews/inputs/.
 # 3. One command:
-scripts/monthly_review.zsh
+python3 scripts/monthly_review.py
 # 4. Paste the printed monthly_review_prompt.md into your ChatGPT Project and upload the bundle.
 ```
 
