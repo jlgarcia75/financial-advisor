@@ -103,22 +103,28 @@ def check_csv_rows(path: Path, report: Report, require_account_id: bool = True) 
 
 
 def check_holdings_foot(inputs_dir: Path, report: Report) -> None:
-    """Per-account holdings market value should be close to the account total."""
+    """Per-account holdings market value should foot to the account total, checked
+    point-in-time: grouped by (statement_id, account_id) so an account with several
+    monthly statements in the master isn't summed across months."""
     accounts = read_csv(inputs_dir / "manual_statements_master_accounts.csv")
     holdings = read_csv(inputs_dir / "manual_statements_master_holdings.csv")
     if not accounts or not holdings:
         return
-    holding_totals: dict[str, float] = {}
+
+    def key(row) -> tuple[str, str]:
+        return first_value(row, ("statement_id",)), first_value(row, ACCOUNT_ID_FIELDS)
+
+    holding_totals: dict[tuple[str, str], float] = {}
     for h in holdings:
-        acct = first_value(h, ACCOUNT_ID_FIELDS)
-        holding_totals[acct] = holding_totals.get(acct, 0.0) + (parse_number(first_value(h, ("market_value",))) or 0.0)
+        holding_totals[key(h)] = holding_totals.get(key(h), 0.0) + (parse_number(first_value(h, ("market_value",))) or 0.0)
     for a in accounts:
-        acct = first_value(a, ACCOUNT_ID_FIELDS)
+        k = key(a)
         total = parse_number(first_value(a, ("total_account", "current_value")))
-        if acct in holding_totals and total is not None:
-            diff = abs(holding_totals[acct] - total)
+        if k in holding_totals and total is not None:
+            diff = abs(holding_totals[k] - total)
             if diff > max(1.0, total * 0.01):
-                report.warn(f"account {acct}: holdings sum {holding_totals[acct]:.2f} "
+                stmt, acct = k
+                report.warn(f"statement {stmt} account {acct}: holdings sum {holding_totals[k]:.2f} "
                             f"!= account total {total:.2f} (diff {diff:.2f})")
 
 
