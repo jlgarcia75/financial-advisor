@@ -463,6 +463,35 @@ def main() -> int:
         check(len(rep2.warnings) == 1 and "2026-07_x" in rep2.warnings[0],
               "a real per-statement footing mismatch is still flagged, with statement_id")
 
+        print("[14] archive_month (archive superseded, keep latest of each kind)")
+        import archive_month as am
+        arch_st = root / "arch_statements"
+        arch_rv = root / "arch_reviews"
+        arch_st.mkdir()
+        arch_rv.mkdir()
+        for name in ("2026-06_empower_statement.json", "2026-06_empower_statement.md",
+                     "2026-07_empower_statement.json", "2026-07_empower_statement.md",
+                     "2026-02_central_statement.md"):  # central has no newer month -> kept
+            (arch_st / name).write_text("x")
+        for name in ("2026-06_dashboard.md", "2026-07_dashboard.md",
+                     "NET_WORTH_snapshot.csv", "2026_tax_strategy_prompt.md"):
+            (arch_rv / name).write_text("x")
+        rc = subprocess.run([sys.executable, str(SCRIPTS / "archive_month.py"),
+                             "--statements-dir", str(arch_st), "--reviews-dir", str(arch_rv)],
+                            capture_output=True, text=True)
+        check(rc.returncode == 0, "archive_month runs cleanly")
+        # June statement + June dashboard are superseded by July -> archived.
+        check((arch_st / "Archive/2026-06/2026-06_empower_statement.json").exists()
+              and (arch_rv / "Archive/2026-06/2026-06_dashboard.md").exists(),
+              "superseded June statement + dashboard moved to Archive/2026-06/")
+        # Latest of each kind, non-dated, and year-only tax prompt stay put.
+        for keep in ("2026-07_empower_statement.json", "2026-02_central_statement.md"):
+            check((arch_st / keep).exists(), f"kept latest/only statement in place: {keep}")
+        check((arch_rv / "2026-07_dashboard.md").exists()
+              and (arch_rv / "NET_WORTH_snapshot.csv").exists()
+              and (arch_rv / "2026_tax_strategy_prompt.md").exists(),
+              "latest dashboard, rolling snapshot, and year-only tax prompt untouched")
+
     print("\nSMOKE TEST PASSED")
     return 0
 

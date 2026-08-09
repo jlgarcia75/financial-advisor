@@ -25,7 +25,7 @@ jobs:
         run: python -m py_compile scripts/*.py
 
       - name: Shell syntax check (orchestrator)
-        run: zsh -n scripts/finance_statements.zsh
+        run: zsh -n scripts/finance_statements.zsh && zsh -n scripts/monthly_review.zsh
 
       - name: Validate JSON and schemas
         run: python tests/validate_json.py
