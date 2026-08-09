@@ -436,6 +436,33 @@ def main() -> int:
         names = {p.name for p in (reviews / "advisor_bundle").iterdir()}
         check("cost_basis_QFA339398.csv" in names, "normalized cost-basis CSV is bundled (Tier 2)")
 
+        print("[13] check_holdings_foot point-in-time (multi-statement master)")
+        import check_finance_data_quality as dq
+        dq_dir = root / "dq_inputs"
+        dq_dir.mkdir()
+        write_csv(dq_dir / "manual_statements_master_accounts.csv", [
+            {"statement_id": "2026-06_x", "account_id": "ACCX", "total_account": "1000.00"},
+            {"statement_id": "2026-07_x", "account_id": "ACCX", "total_account": "1100.00"},
+        ])
+        # Same account, two months; each month's holdings foot to that month's total.
+        foot_rows = [
+            {"statement_id": "2026-06_x", "account_id": "ACCX", "market_value": "600.00"},
+            {"statement_id": "2026-06_x", "account_id": "ACCX", "market_value": "400.00"},
+            {"statement_id": "2026-07_x", "account_id": "ACCX", "market_value": "700.00"},
+            {"statement_id": "2026-07_x", "account_id": "ACCX", "market_value": "400.00"},
+        ]
+        write_csv(dq_dir / "manual_statements_master_holdings.csv", foot_rows)
+        rep = dq.Report()
+        dq.check_holdings_foot(dq_dir, rep)
+        check(rep.warnings == [],
+              "multi-statement account foots per month (not summed across months)")
+        # A genuine footing error in one month is still caught, and names the statement.
+        write_csv(dq_dir / "manual_statements_master_holdings.csv", foot_rows[:3])  # July short by 400
+        rep2 = dq.Report()
+        dq.check_holdings_foot(dq_dir, rep2)
+        check(len(rep2.warnings) == 1 and "2026-07_x" in rep2.warnings[0],
+              "a real per-statement footing mismatch is still flagged, with statement_id")
+
     print("\nSMOKE TEST PASSED")
     return 0
 
