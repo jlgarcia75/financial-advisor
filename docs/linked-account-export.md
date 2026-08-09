@@ -82,22 +82,28 @@ Copy each code block into the matching file in `Reviews/inputs/`.
 
 1. Refresh linked accounts in ChatGPT/Finances.
 2. Run the export prompt above; save the three CSVs into `Reviews/inputs/`.
-3. Ingest in one command — validates the CSVs, then reconciles and rebuilds the dashboard,
-   manifest, and monthly review prompt:
+3. Run the **monthly review** — the full one command that processes any new statements, then
+   validates these CSVs, reconciles, rebuilds the dashboard / review prompt / advisor bundle, and
+   archives the previous month. It prints the review prompt to paste:
 
    ```bash
-   python3 scripts/ingest_linked_export.py
-   # or, if you saved the CSVs elsewhere:
-   python3 scripts/ingest_linked_export.py --source ~/Downloads/linked
+   scripts/monthly_review.zsh                        # CSVs already in Reviews/inputs/
+   scripts/monthly_review.zsh --source ~/Downloads/linked   # copy a fresh export first
+   ```
+
+   See [monthly-review.md](monthly-review.md) for the full ritual. If you *only* refreshed linked
+   data (no new statements, no archiving), you can run just the linked half instead:
+
+   ```bash
+   python3 scripts/ingest_linked_export.py [--source ~/Downloads/linked]
    ```
 
 4. Review `Reviews/YYYY-MM_reconciliation_review.md` and resolve any `needs_review` accounts.
 
 The extraction from ChatGPT (steps 1–2) is manual by design — there is no supported API to
-pull linked-account data automatically. Everything after the export is automated by the
-ingest script. To run a single stage by hand instead, see
-`validate_statement_csvs.py --help`, `reconcile_manual_vs_linked.py --help`, and
-`build_finance_dashboard.py --help`.
+pull linked-account data automatically. Everything after the export is automated. To run a single
+stage by hand instead, see `validate_statement_csvs.py --help`,
+`reconcile_manual_vs_linked.py --help`, and `build_finance_dashboard.py --help`.
 
 ## Safety
 
