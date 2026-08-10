@@ -46,8 +46,18 @@ INSTITUTION_FIELDS = ("institution", "institution_name", "provider", "brokerage"
 ACCOUNT_VALUE_FIELDS = ("total_account", "current_value", "market_value", "value", "balance")
 HOLDING_VALUE_FIELDS = ("market_value", "current_value", "value")
 TX_AMOUNT_FIELDS = ("amount", "transaction_amount")
+TX_TYPE_FIELDS = ("transaction_type", "category")
 TX_DATE_FIELDS = ("date", "posted_date", "authorized_date", "transaction_date")
 DUPLICATE_STATUSES = {"probable_duplicate", "confirmed_duplicate"}
+
+# Transaction types/categories that are NOT household cash flow: security trades,
+# internal fund entries, and transfers between the household's own accounts
+# (credit-card payments included). Excluded from inflow/outflow so the savings rate
+# and month-to-month budget trends reflect real income and spending only.
+CASH_FLOW_EXCLUDE = (
+    "buy", "sell", "reinvest", "transfer", "journal", "net income",
+    "distribution", "contribution", "rollover", "wire", "redemption", "sweep",
+)
 
 
 def load_account_notes(accounts_dir: Path) -> dict[str, dict[str, str]]:
@@ -232,6 +242,13 @@ def signed_amount(row: dict[str, str]) -> float | None:
     return amount
 
 
+def is_cash_flow_excluded(row: dict[str, str]) -> bool:
+    """True for trades, internal fund entries, and own-account transfers — the
+    activity that inflates cash flow without being real income or spending."""
+    label = normalize_text(first_value(row, TX_TYPE_FIELDS))
+    return any(keyword in label for keyword in CASH_FLOW_EXCLUDE)
+
+
 def build_cash_flow(manual_tx, linked_tx, recon, notes):
     """Inflow/outflow/net by YYYY-MM month across both sources.
 
@@ -253,7 +270,11 @@ def build_cash_flow(manual_tx, linked_tx, recon, notes):
             amt = signed_amount(row)
             if amt is None:
                 continue
-            bucket = months.setdefault(month, {"inflows": 0.0, "outflows": 0.0})
+            bucket = months.setdefault(month, {"inflows": 0.0, "outflows": 0.0, "excluded": 0.0})
+            # Trades / internal fund entries / own-account transfers are not cash flow.
+            if is_cash_flow_excluded(row):
+                bucket["excluded"] += abs(amt)
+                continue
             if amt >= 0:
                 bucket["inflows"] += amt
             else:
@@ -266,6 +287,7 @@ def build_cash_flow(manual_tx, linked_tx, recon, notes):
             "inflows": round(inflows, 2),
             "outflows": round(outflows, 2),
             "net": round(inflows + outflows, 2),
+            "excluded": round(months[month]["excluded"], 2),
         })
     return rows
 
@@ -328,10 +350,12 @@ def write_dashboard_md(path, period, snapshot, net_worth, allocation, alloc_tota
     if cash_flow:
         recent = cash_flow[-6:]
         lines += ["", "## Cash flow (recent months)", "",
-                  "| Month | Inflows | Outflows | Net |", "| --- | --- | --- | --- |"]
+                  "_Income vs spending only. Trades, internal fund entries, and transfers between "
+                  "your own accounts (incl. card payments) are excluded (shown for transparency)._",
+                  "", "| Month | Inflows | Outflows | Net | Excluded |", "| --- | --- | --- | --- | --- |"]
         for r in recent:
             lines.append(f"| {r['period']} | {fmt_money(r['inflows'])} | "
-                         f"{fmt_money(r['outflows'])} | {fmt_money(r['net'])} |")
+                         f"{fmt_money(r['outflows'])} | {fmt_money(r['net'])} | {fmt_money(r.get('excluded', 0))} |")
 
     lines += ["", "---", "",
               "_Source: `Reviews/inputs/advisor_inputs_manifest.json`. See "

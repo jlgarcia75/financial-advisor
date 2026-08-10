@@ -464,7 +464,6 @@ def main() -> int:
               "a real per-statement footing mismatch is still flagged, with statement_id")
 
         print("[14] archive_month (archive superseded, keep latest of each kind)")
-        import archive_month as am
         arch_st = root / "arch_statements"
         arch_rv = root / "arch_reviews"
         arch_st.mkdir()
@@ -491,6 +490,25 @@ def main() -> int:
               and (arch_rv / "NET_WORTH_snapshot.csv").exists()
               and (arch_rv / "2026_tax_strategy_prompt.md").exists(),
               "latest dashboard, rolling snapshot, and year-only tax prompt untouched")
+
+        print("[15] build_cash_flow excludes trades + transfers")
+        import build_finance_dashboard as bfd
+        manual_tx = [
+            {"account_id": "A", "date": "2026-07-03", "transaction_type": "Cash Dividends", "amount": "100"},
+            {"account_id": "A", "date": "2026-07-04", "transaction_type": "Buys", "amount": "5000"},
+            {"account_id": "A", "date": "2026-07-05", "transaction_type": "Sells", "amount": "4000"},
+            {"account_id": "A", "date": "2026-07-06", "transaction_type": "Reinvestment", "amount": "100"},
+        ]
+        linked_tx = [
+            {"account_id": "B", "date": "2026-07-10", "category": "income", "amount": "3000"},
+            {"account_id": "B", "date": "2026-07-11", "category": "groceries", "amount": "-200"},
+            {"account_id": "B", "date": "2026-07-12", "category": "transfers", "amount": "-1500"},  # card payment
+        ]
+        cf = {r["period"]: r for r in bfd.build_cash_flow(manual_tx, linked_tx, {}, {})}["2026-07"]
+        check(cf["inflows"] == 3100.0, "inflows = dividend 100 + income 3000 (trades/transfers out)")
+        check(cf["outflows"] == -200.0, "outflows = groceries only (card-payment transfer excluded)")
+        check(cf["excluded"] == 10600.0, "excluded = 5000 buy + 4000 sell + 100 reinvest + 1500 transfer")
+        check(cf["net"] == 2900.0, "net = real income - real spending")
 
     print("\nSMOKE TEST PASSED")
     return 0
