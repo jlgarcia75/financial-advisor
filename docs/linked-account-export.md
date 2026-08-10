@@ -48,35 +48,14 @@ Conventions:
 
 ## The monthly export prompt
 
-Paste this into your ChatGPT Financial Advisor project after your linked accounts refresh:
+The exact prompt to paste is in **[linked_export_prompt.md](linked_export_prompt.md)** — the single
+canonical copy (also shipped inside the advisor bundle, so it's available in your ChatGPT Project).
 
-```text
-Export my linked financial accounts as three CSV code blocks I can copy verbatim. Do not
-summarize or round — emit raw rows. Use exactly these headers and column orders:
-
-1) linked_accounts.csv
-account_id,account_name,institution,account_type,account_last4,current_value,as_of_date,source
-- One row per linked account (checking, savings, credit card, brokerage, retirement, loan).
-- current_value: numeric, no $ or commas; liabilities (credit cards, loans) negative.
-- account_last4: last 4 digits as text; source: linked.
-
-2) linked_holdings.csv
-account_id,account_name,institution,account_last4,symbol,security_name,asset_class,quantity,current_price,market_value,as_of_date,source
-- One row per investment position in any linked brokerage/retirement account.
-- asset_class: one of Equity, Fixed Income, Cash and Cash Equivalents; leave blank if unsure.
-- Numbers only; source: linked. If I have no linked investment positions, output just the header.
-
-3) linked_transactions.csv
-transaction_id,account_id,account_name,institution,date,description,merchant_name,amount,category,source
-- One row per transaction for the reporting month.
-- amount numeric, spending/withdrawals negative, income/deposits positive.
-- date as YYYY-MM-DD; source: linked.
-
-Use consistent account_id values across all three files. Do not invent data; leave a cell
-blank if unknown.
-```
-
-Copy each code block into the matching file in `Reviews/inputs/`.
+It forces ChatGPT to query **live** Plaid data at run time — not the uploaded snapshot, cached
+exports, or the advisor bundle — and to state coverage gaps rather than silently falling back to a
+stale file. That live-pull is the one deliberate exception to "the bundle is authoritative"; run it
+to *produce* a fresh snapshot, then re-ingest. State the reporting month when you run it, and save the
+three code blocks into `Reviews/inputs/`.
 
 ## Monthly checklist
 

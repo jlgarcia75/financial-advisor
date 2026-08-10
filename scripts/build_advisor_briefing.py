@@ -27,6 +27,8 @@ from advisor_guardrails import GUARDRAILS  # noqa: E402
 VAULT = Path("/Users/jesusgarcia/ObsidianVaults/second-brain/91_finance")
 DEFAULT_REVIEWS_DIR = VAULT / "Reviews"
 DEFAULT_INPUTS_DIR = VAULT / "Reviews/inputs"
+REPO = Path(__file__).resolve().parent.parent
+EXPORT_PROMPT = REPO / "docs" / "linked_export_prompt.md"
 
 # Bundle spec: (base, relative-path-or-template). base is one of "reviews", "inputs",
 # "finance" and is resolved to the matching --dir at runtime. Tier 1 = safe aggregates,
@@ -325,6 +327,9 @@ def build_instructions(period: str, linked: list[str], asof: str) -> str:
         "- If live Plaid and the snapshot disagree, report the delta and recommend refreshing the "
         "bundle — do not silently blend them. If a Plaid account isn't in the snapshot, flag it as a "
         "coverage gap for the next export.",
+        "- To REFRESH the snapshot, I run `linked_export_prompt.md` (included here). That is the one "
+        "step that deliberately pulls LIVE Plaid data to produce new CSVs — it does not read this "
+        "bundle. Everywhere else, this bundle is authoritative.",
         "",
         "Ground rules:",
         GUARDRAILS,
@@ -390,9 +395,13 @@ def main() -> int:
     _, linked_i, _, linked_asof = account_coverage(args.reviews_dir, args.inputs_dir)
     (bundle_dir / "project_instructions.md").write_text(
         build_instructions(period, linked_i, linked_asof), encoding="utf-8")
+    # The refresh prompt travels with the Project so you can regenerate the live
+    # linked export from inside it (the one deliberate live-data-pull step).
+    if EXPORT_PROMPT.exists():
+        shutil.copy2(EXPORT_PROMPT, bundle_dir / EXPORT_PROMPT.name)
 
     print(f"Wrote {args.reviews_dir / 'ADVISOR_BRIEFING.md'}")
-    print(f"Assembled {bundle_dir} with {len(bundled)} data file(s) + briefing + instructions")
+    print(f"Assembled {bundle_dir} with {len(bundled)} data file(s) + briefing + instructions + export prompt")
     for name in bundled:
         print(f"  + {name}")
     return 0
