@@ -394,6 +394,9 @@ def main() -> int:
               "briefing states all manual + linked accounts are merged and counted once")
         check("live Plaid" in instructions and "count a linked account twice" in instructions,
               "instructions warn against double-counting live Plaid against the snapshot")
+        check((bundle / "linked_export_prompt.md").exists()
+              and "linked_export_prompt.md" in instructions,
+              "bundle ships the live-data export prompt and instructions point to it")
 
         print("[12] import_unrealized_gl + cost basis in tax prompt & bundle")
         sys.path.insert(0, str(SCRIPTS))
