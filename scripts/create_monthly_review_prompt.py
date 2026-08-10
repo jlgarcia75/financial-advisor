@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _finance_common import read_json  # noqa: E402
+from _finance_common import read_csv, read_json  # noqa: E402
 
 VAULT = Path("/Users/jesusgarcia/ObsidianVaults/second-brain")
 DEFAULT_INPUTS_DIR = VAULT / "91_finance/Reviews/inputs"
@@ -35,9 +35,12 @@ STANDING_QUESTIONS = [
 ]
 
 
-def build_prompt(period: str, manifest: dict, dashboard_rel: str, has_reconciliation: bool) -> str:
+def build_prompt(period: str, manifest: dict, dashboard_rel: str, has_reconciliation: bool,
+                 combined_accounts: int | None) -> str:
     datasets = manifest.get("datasets", {})
     periods = ", ".join(manifest.get("periods_covered", [])) or "unknown"
+    combined = (f"**{combined_accounts}** (see `NET_WORTH_snapshot.csv`)"
+                if combined_accounts is not None else "see `NET_WORTH_snapshot.csv`")
     lines = [
         f"# {period} Monthly Financial Review — Advisor Prompt",
         "",
@@ -47,9 +50,10 @@ def build_prompt(period: str, manifest: dict, dashboard_rel: str, has_reconcilia
         "",
         "## Data available",
         "",
-        f"- Periods covered: **{periods}**",
-        f"- Accounts: **{manifest.get('account_count', 'unknown')}**",
-        f"- Row counts: {manifest.get('row_counts', {})}",
+        f"- Statement periods ingested (manual): **{periods}**",
+        f"- Manual-statement accounts: **{manifest.get('account_count', 'unknown')}** "
+        f"(row counts {manifest.get('row_counts', {})}) — this is manual-input coverage only.",
+        f"- Total accounts incl. linked (use this for coverage): {combined}.",
         "",
         "### Files (attach or point the connector at these)",
         "",
@@ -113,9 +117,15 @@ def main() -> int:
     dashboard_rel = dashboard.name if dashboard.exists() else f"{period}_dashboard.md (run build_finance_dashboard.py)"
     has_reconciliation = bool(manifest.get("reconciliation"))
 
+    # Combined (manual + linked) account coverage, from the deduplicated snapshot.
+    snapshot = read_csv(args.reviews_dir / "NET_WORTH_snapshot.csv")
+    combined_accounts = (sum(1 for r in snapshot if str(r.get("included_in_networth", "")).lower() == "true")
+                         or None) if snapshot else None
+
     out = args.reviews_dir / f"{period}_monthly_review_prompt.md"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(build_prompt(period, manifest, dashboard_rel, has_reconciliation), encoding="utf-8")
+    out.write_text(build_prompt(period, manifest, dashboard_rel, has_reconciliation, combined_accounts),
+                   encoding="utf-8")
     print(f"Wrote {out}")
     return 0
 

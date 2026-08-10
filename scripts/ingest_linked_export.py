@@ -68,6 +68,28 @@ def copy_from_source(source: Path, inputs_dir: Path) -> None:
     print(f"Copied {len(copied)} file(s) from {source}: {', '.join(copied)}")
 
 
+def snapshot_linked(inputs_dir: Path) -> None:
+    """Keep a dated copy of the linked exports under linked_history/<YYYY-MM>/ so
+    month-over-month linked history accrues — the live linked_*.csv are overwritten
+    on each ingest, which is why historical net worth is missing for linked accounts."""
+    import csv as _csv
+
+    acct = inputs_dir / "linked_accounts.csv"
+    months = []
+    if acct.exists():
+        for row in _csv.DictReader(acct.open(encoding="utf-8-sig")):
+            d = (row.get("as_of_date") or "").strip()
+            if len(d) >= 7:
+                months.append(d[:7])
+    month = max(months) if months else "undated"
+    dest = inputs_dir / "linked_history" / month
+    dest.mkdir(parents=True, exist_ok=True)
+    saved = [name for name in LINKED_FILES
+             if (inputs_dir / name).exists() and shutil.copy2(inputs_dir / name, dest / name)]
+    if saved:
+        print(f"Snapshotted {len(saved)} linked file(s) -> linked_history/{month}/")
+
+
 def validate_linked(inputs_dir: Path) -> list[Path]:
     present = [inputs_dir / n for n in LINKED_FILES if (inputs_dir / n).exists()]
     if not (inputs_dir / "linked_accounts.csv").exists():
@@ -111,6 +133,7 @@ def main() -> int:
         copy_from_source(args.source, args.inputs_dir)
 
     validate_linked(args.inputs_dir)
+    snapshot_linked(args.inputs_dir)
 
     recon_out = args.reviews_dir / "reconciliation"
     period_args = ["--period", args.period] if args.period else []

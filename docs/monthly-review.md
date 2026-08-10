@@ -47,3 +47,14 @@ cash-flow history is preserved. Rolling-latest files (`NET_WORTH_snapshot.csv`, 
 the year-based tax prompt, `inputs/`, `advisor_bundle/`) have no month prefix and are never touched.
 
 Run `archive_month.py --dry-run` to preview moves.
+
+## Data-quality signals
+
+- **Staleness:** `check_finance_data_quality.py` flags any account whose as-of date lags the
+  freshest data by more than 45 days (catches e.g. a quarterly fund statement that hasn't been
+  refreshed). It's a warning, not a hard error.
+- **Linked history:** each ingest snapshots the three `linked_*.csv` into
+  `Reviews/inputs/linked_history/<YYYY-MM>/`, so month-over-month linked history accrues even though
+  the live files are overwritten.
+- **Account coverage:** the monthly review prompt labels manual-statement counts separately from the
+  combined (manual + linked) account count, so "8 accounts" isn't mistaken for total coverage.
