@@ -22,6 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _finance_common import (  # noqa: E402
     first_value,
+    parse_date,
     parse_frontmatter,
     parse_number,
     read_csv,
@@ -35,6 +36,7 @@ DEFAULT_REVIEWS_DIR = VAULT / "91_finance/Reviews"
 
 ACCOUNT_ID_FIELDS = ("account_id",)
 VALUE_FIELDS = ("market_value", "current_value", "total_account", "value")
+STALE_DAYS = 45  # an account whose as-of lags the freshest data by more than this is flagged
 
 
 class Report:
@@ -128,6 +130,38 @@ def check_holdings_foot(inputs_dir: Path, report: Report) -> None:
                             f"!= account total {total:.2f} (diff {diff:.2f})")
 
 
+def check_staleness(inputs_dir: Path, report: Report) -> None:
+    """Flag accounts whose as-of date lags the freshest data by more than STALE_DAYS
+    — net worth mixes as-of dates across sources, and a badly stale value (e.g. a
+    quarterly fund statement) silently distorts the total."""
+    from datetime import date
+
+    latest: dict[str, tuple[str, str, str]] = {}  # account_id -> (iso as-of, name, source)
+    for source, fname in (("manual", "manual_statements_master_accounts.csv"), ("linked", "linked_accounts.csv")):
+        for r in read_csv(inputs_dir / fname):
+            aid = first_value(r, ACCOUNT_ID_FIELDS)
+            iso = parse_date(first_value(r, ("as_of_date",)))
+            if not aid or not iso:
+                continue
+            if aid not in latest or iso > latest[aid][0]:
+                latest[aid] = (iso, first_value(r, ("account_name", "name")) or aid, source)
+    if not latest:
+        return
+    newest = max(v[0] for v in latest.values())
+    try:
+        newest_d = date.fromisoformat(newest)
+    except ValueError:
+        return
+    for iso, name, source in sorted(latest.values()):
+        try:
+            days = (newest_d - date.fromisoformat(iso)).days
+        except ValueError:
+            continue
+        if days > STALE_DAYS:
+            report.warn(f"account {name} as-of {iso} is {days} days behind the latest data "
+                        f"({newest}) — refresh the {source} source")
+
+
 def write_report(path: Path, report: Report) -> None:
     lines = ["# Finance Data Quality Report", ""]
     lines.append(f"- Errors: **{len(report.errors)}**")
@@ -160,6 +194,7 @@ def main() -> int:
     for name in ("linked_accounts", "linked_holdings", "linked_transactions"):
         check_csv_rows(args.inputs_dir / f"{name}.csv", report, require_account_id=False)
     check_holdings_foot(args.inputs_dir, report)
+    check_staleness(args.inputs_dir, report)
 
     report_path = args.report or (args.reviews_dir / "data_quality_report.md")
     write_report(report_path, report)

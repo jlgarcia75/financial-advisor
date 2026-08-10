@@ -196,7 +196,11 @@ def main() -> int:
 
         print("[4] create_monthly_review_prompt")
         run([SCRIPTS / "create_monthly_review_prompt.py", "--inputs-dir", inputs, "--reviews-dir", reviews])
-        check((reviews / "2025-12_monthly_review_prompt.md").exists(), "monthly review prompt written")
+        mrp = reviews / "2025-12_monthly_review_prompt.md"
+        check(mrp.exists(), "monthly review prompt written")
+        mrp_text = mrp.read_text()
+        check("manual-input coverage only" in mrp_text and "incl. linked (use this for coverage)" in mrp_text,
+              "prompt labels manual-only counts vs combined coverage (no 8-vs-26 ambiguity)")
 
         print("[5] check_finance_data_quality (must pass, exit 0)")
         run([SCRIPTS / "check_finance_data_quality.py", "--statements-dir", statements,
@@ -211,6 +215,8 @@ def main() -> int:
         check((inputs / "manual_linked_reconciliation.csv").exists(),
               "ingest regenerated manual_linked_reconciliation.csv")
         check((reviews / "2025-12_dashboard.md").exists(), "ingest rebuilt the dashboard")
+        snaps = list((inputs / "linked_history").glob("*/linked_accounts.csv"))
+        check(len(snaps) >= 1, "ingest snapshotted linked exports into linked_history/<month>/")
 
         print("[7] create_tax_strategy_prompt (data-grounded tax prompt)")
         tax_profile = root / "tax_profile.md"
@@ -509,6 +515,22 @@ def main() -> int:
         check(cf["outflows"] == -200.0, "outflows = groceries only (card-payment transfer excluded)")
         check(cf["excluded"] == 10600.0, "excluded = 5000 buy + 4000 sell + 100 reinvest + 1500 transfer")
         check(cf["net"] == 2900.0, "net = real income - real spending")
+
+        print("[16] check_staleness (flag accounts lagging the freshest data)")
+        import check_finance_data_quality as dq
+        st_dir = root / "stale_inputs"
+        st_dir.mkdir()
+        write_csv(st_dir / "manual_statements_master_accounts.csv", [
+            {"account_id": "FRESH", "account_name": "Fresh Acct", "as_of_date": "2026-07-31"},
+            {"account_id": "STALE", "account_name": "Old Fund", "as_of_date": "2026-02-28"},
+        ])
+        write_csv(st_dir / "linked_accounts.csv", [
+            {"account_id": "LINK", "name": "Linked Bank", "as_of_date": "2026-07-12"},  # 19d — within window
+        ])
+        rep = dq.Report()
+        dq.check_staleness(st_dir, rep)
+        check(len(rep.warnings) == 1 and "Old Fund" in rep.warnings[0] and "153 days" in rep.warnings[0],
+              "stale account flagged with age; fresh + within-window accounts are not")
 
     print("\nSMOKE TEST PASSED")
     return 0
