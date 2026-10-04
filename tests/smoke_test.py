@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -534,6 +535,45 @@ def main() -> int:
         dq.check_staleness(st_dir, rep)
         check(len(rep.warnings) == 1 and "Old Fund" in rep.warnings[0] and "153 days" in rep.warnings[0],
               "stale account flagged with age; fresh + within-window accounts are not")
+
+        print("[17] finance_statements.zsh auto-processes (no 'ready' step) + auto-builds")
+        av = root / "auto"
+        av_st, av_in, av_rv, av_ac = av / "Statements", av / "Reviews/inputs", av / "Reviews", av / "Accounts"
+        for d in (av_st, av_in, av_rv, av_ac):
+            d.mkdir(parents=True, exist_ok=True)
+        cl_body = ("02/28/2025\nCapital Account Statement\nTest Income Fund\nInvestor: Alice\n"
+                   "| | Beginning Balance | | $1,000.00 | 0 |\n"
+                   "| --- | --- | --- | --- | --- |\n"
+                   "| | Ending Balance | | $1,100.00 | $1,100.00 |\n"
+                   "| Ownership | | 2.5% | Return of capital | $0 |\n"
+                   "| Total Commitment | | $5,000 | Return on capital | $50 |\n"
+                   "Contributions to date $1,050.00 Distributions to date $50.00\n"
+                   "Transactions\n| Date | Transaction Type | Description | Amount |\n"
+                   "| 02/28/2025 | Distribution | Distribution | $50.00 |\n")
+        # No 'status: ready' — must still process automatically.
+        (av_st / "2025-02_auto-capital_statement.md").write_text(
+            '---\ntype: financial_statement\nstatement_id: "2025-02_auto-capital_statement"\n'
+            "institution: central-lending\nstatement_type: central-lending-capital-account\n---\n\n" + cl_body)
+        # 'status: hold' — must be skipped.
+        (av_st / "2025-02_held-capital_statement.md").write_text(
+            '---\ntype: financial_statement\nstatement_id: "2025-02_held-capital_statement"\n'
+            "institution: central-lending\nstatement_type: central-lending-capital-account\nstatus: hold\n---\n\n"
+            + cl_body)
+        env = {**os.environ, "FINANCE_ENV_FILE": "/dev/null",
+               "STATEMENTS_DIR": str(av_st), "INPUTS_DIR": str(av_in),
+               "REVIEWS_DIR": str(av_rv), "ACCOUNTS_DIR": str(av_ac),
+               "PYTHON_BIN": sys.executable, "MARKITDOWN_BIN": "/nonexistent-no-pdfs"}
+        proc = subprocess.run(["zsh", str(SCRIPTS / "finance_statements.zsh"), "--no-archive"],
+                              env=env, capture_output=True, text=True)
+        if proc.returncode != 0:
+            print(proc.stdout, proc.stderr, file=sys.stderr)
+        check(proc.returncode == 0, "finance_statements.zsh ran cleanly")
+        check((av_st / "2025-02_auto-capital_statement.json").exists(),
+              "statement auto-processed with NO 'status: ready' step")
+        check(not (av_st / "2025-02_held-capital_statement.json").exists(),
+              "'status: hold' statement is skipped")
+        check(list(av_rv.glob("*_dashboard.md")) and list(av_rv.glob("*_monthly_review_prompt.md")),
+              "dashboard + monthly review prompt auto-created (no manual step)")
 
     print("\nSMOKE TEST PASSED")
     return 0

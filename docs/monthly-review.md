@@ -1,26 +1,36 @@
-# Monthly Review (one command)
+# Monthly Review
 
-`scripts/monthly_review.py` runs the whole monthly chain so the only thing left to do is paste
-the generated prompt into ChatGPT.
+## Statements process themselves
 
-## What it does
+You do **not** set `status: ready` or run anything to ingest a statement. Drop a statement
+(PDF or Markdown) into `91_finance/Statements/` and the `finance_statements` LaunchAgent runs the
+full chain automatically: convert → extract → validate → masters → data-quality → **dashboard** →
+**monthly review prompt** → **advisor briefing/bundle** → archive superseded months. The fresh
+`YYYY-MM_dashboard.md` and `YYYY-MM_monthly_review_prompt.md` just appear in `Reviews/`.
 
-1. **Process statements** — runs `finance_statements.zsh` (new PDFs → Markdown → CSVs → manifests →
-   masters → data quality).
-2. **Rebuild the combined view** — runs `ingest_linked_export.py`: validate linked exports →
-   reconcile manual vs linked → **dashboard** → **monthly review prompt** → **advisor briefing +
-   upload bundle**.
-3. **Archive superseded artifacts** — runs `archive_month.py`.
+To hold a statement back from processing, set its frontmatter `status:` to `hold` (or `skip` /
+`draft` / `ignore`).
+
+## `monthly_review.py` — on-demand refresh
+
+`scripts/monthly_review.py` runs the same chain by hand — use it after a fresh **linked export**
+(which is manual), or any time you want to force a rebuild without dropping a statement. It wraps
+`finance_statements.zsh --rebuild`, which:
+
+1. **Processes statements** — convert → extract → validate → masters → data quality (no `ready` step).
+2. **Rebuilds the combined view** — reconcile (if linked data present) → **dashboard** →
+   **monthly review prompt** → **advisor briefing + upload bundle**.
+3. **Archives superseded artifacts** — `archive_month.py`.
 
 It prints the path to the fresh `YYYY-MM_monthly_review_prompt.md` and the `advisor_bundle/`.
 
 ## Monthly ritual
 
 ```bash
-# 1. Drop new statement PDFs into 91_finance/Statements/ and set each to status: ready.
+# 1. Drop new statement PDFs into 91_finance/Statements/ — they process automatically.
 # 2. Run the ChatGPT linked-account export (docs/linked-account-export.md); save the 3 CSVs
 #    into 91_finance/Reviews/inputs/.
-# 3. One command:
+# 3. Refresh so the dashboard/prompt pick up the new linked data:
 python3 scripts/monthly_review.py
 # 4. Paste the printed monthly_review_prompt.md into your ChatGPT Project and upload the bundle.
 ```

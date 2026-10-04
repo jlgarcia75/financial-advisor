@@ -132,8 +132,16 @@ def main() -> int:
     if args.source:
         copy_from_source(args.source, args.inputs_dir)
 
-    validate_linked(args.inputs_dir)
-    snapshot_linked(args.inputs_dir)
+    # Linked data is optional: the combined view still builds from the manual
+    # statements alone (so the auto pipeline can rebuild outputs on a statement drop
+    # even before the month's linked export exists).
+    has_linked = (args.inputs_dir / "linked_accounts.csv").exists()
+    if has_linked:
+        validate_linked(args.inputs_dir)
+        snapshot_linked(args.inputs_dir)
+    else:
+        print("No linked_accounts.csv present — building the combined view from manual "
+              "statements only (run the linked export to add linked accounts).")
 
     recon_out = args.reviews_dir / "reconciliation"
     period_args = ["--period", args.period] if args.period else []
@@ -141,12 +149,13 @@ def main() -> int:
     # Masters must exist/be current before reconcile reads them.
     run([SCRIPTS / "build_advisor_inputs.py", "--statements-dir", args.statements_dir,
          "--output-dir", args.inputs_dir], "build advisor inputs")
-    run([SCRIPTS / "reconcile_manual_vs_linked.py", "--manual-dir", args.inputs_dir,
-         "--linked-dir", args.inputs_dir, "--output-dir", recon_out,
-         "--reviews-dir", args.reviews_dir, *period_args], "reconcile manual vs linked")
-    # Re-run so advisor_inputs_manifest.json picks up manual_linked_reconciliation.csv.
-    run([SCRIPTS / "build_advisor_inputs.py", "--statements-dir", args.statements_dir,
-         "--output-dir", args.inputs_dir], "refresh advisor inputs manifest")
+    if has_linked:
+        run([SCRIPTS / "reconcile_manual_vs_linked.py", "--manual-dir", args.inputs_dir,
+             "--linked-dir", args.inputs_dir, "--output-dir", recon_out,
+             "--reviews-dir", args.reviews_dir, *period_args], "reconcile manual vs linked")
+        # Re-run so advisor_inputs_manifest.json picks up manual_linked_reconciliation.csv.
+        run([SCRIPTS / "build_advisor_inputs.py", "--statements-dir", args.statements_dir,
+             "--output-dir", args.inputs_dir], "refresh advisor inputs manifest")
     run([SCRIPTS / "build_finance_dashboard.py", "--inputs-dir", args.inputs_dir,
          "--reviews-dir", args.reviews_dir, "--accounts-dir", args.accounts_dir,
          *period_args], "build dashboard")

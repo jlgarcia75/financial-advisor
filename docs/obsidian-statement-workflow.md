@@ -193,6 +193,11 @@ conversion_issue
 archived
 ```
 
+> **Note (automation update):** statements are now processed automatically on drop by
+> `finance_statements.zsh` — there is no manual `status: ready` step. A statement is consolidated
+> once it has been processed (its manifest exists); set `status: hold` / `skip` / `draft` / `ignore`
+> to hold one back. The `status: ready` guidance below is historical.
+
 Only statements marked `status: ready` should be used for advisor calculations.
 
 ## 7. Account Notes
