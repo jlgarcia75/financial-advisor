@@ -108,7 +108,9 @@ def create_manifest(md_path: Path, args) -> None:
         },
         "as_of_date": resolve_as_of_date(fm, md_text, statement_id) or None,
         "run_date": str(fm.get("run_date", "")).strip() or _body_date(md_text, "Run Date") or None,
-        "review_status": fm.get("review_status", fm.get("status", "needs_review")),
+        # A statement that reached manifest creation has been auto-processed, so it is
+        # ready for consolidation unless its frontmatter explicitly says otherwise.
+        "review_status": fm.get("review_status", fm.get("status", "ready")),
         "datasets": dataset_files(base),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }

@@ -2,7 +2,9 @@
 set -euo pipefail
 
 REPO_DIR="${0:A:h:h}"
-ENV_FILE="$REPO_DIR/.env"
+# FINANCE_ENV_FILE lets callers point at a different config (or /dev/null to skip it,
+# e.g. in tests); defaults to the repo .env.
+ENV_FILE="${FINANCE_ENV_FILE:-$REPO_DIR/.env}"
 
 if [[ -f "$ENV_FILE" ]]; then
   source "$ENV_FILE"
@@ -11,7 +13,35 @@ fi
 : "${VAULT:=/Users/jesusgarcia/ObsidianVaults/second-brain}"
 : "${FINANCE_DIR:=$VAULT/91_finance}"
 : "${STATEMENTS_DIR:=$FINANCE_DIR/Statements}"
+: "${INPUTS_DIR:=$FINANCE_DIR/Reviews/inputs}"
+: "${REVIEWS_DIR:=$FINANCE_DIR/Reviews}"
+: "${ACCOUNTS_DIR:=$FINANCE_DIR/Accounts}"
 : "${MARKITDOWN_BIN:=/Users/jesusgarcia/.venv/bin/markitdown}"
+
+log() {
+  print -r -- "[finance_statements] $(date -u +%Y-%m-%dT%H:%M:%SZ) $*"
+}
+
+fail_file() {
+  log "FAILED: ${1:t} — $2"
+}
+
+# Options: --rebuild forces the downstream rebuild (dashboard, review prompt, bundle,
+# archive) even when no new statement was processed; --no-archive skips archiving;
+# --source DIR copies a fresh linked export into inputs first.
+force_rebuild=false
+do_archive=true
+source_dir=""
+while (( $# )); do
+  case "$1" in
+    --rebuild) force_rebuild=true ;;
+    --no-archive) do_archive=false ;;
+    --source) shift; source_dir="${1:-}" ;;
+    *) log "Ignoring unknown argument: $1" ;;
+  esac
+  shift
+done
+
 # Default the interpreter to the same venv markitdown lives in — it has the pipeline
 # deps (PyYAML for statement-type routing, openpyxl for cost-basis import). Under the
 # LaunchAgent's minimal PATH a bare `python3` is the system Python without them.
@@ -33,21 +63,7 @@ if ! "$PYTHON_BIN" -c 'import yaml' 2>/dev/null; then
   exit 1
 fi
 
-log() {
-  print -r -- "[finance_statements] $(date -u +%Y-%m-%dT%H:%M:%SZ) $*"
-}
-
-fail_file() {
-  local file="$1"
-  local reason="$2"
-  log "FAILED: ${file:t} — $reason"
-}
-
-if [[ ! -x "$MARKITDOWN_BIN" ]]; then
-  log "markitdown not found or not executable: $MARKITDOWN_BIN" >&2
-  exit 1
-fi
-# flag for creating advisor inputs manifest if any new statements are processed
+# flag: did we process a new statement this run?
 advisor_inputs_dirty=false
 
 # 1) Convert new PDFs to Markdown.
@@ -56,6 +72,11 @@ for pdf in "$STATEMENTS_DIR"/*_statement.pdf(N); do
   md="${base}.md"
 
   if [[ -f "$md" ]]; then
+    continue
+  fi
+
+  if [[ ! -x "$MARKITDOWN_BIN" ]]; then
+    fail_file "$pdf" "markitdown not found ($MARKITDOWN_BIN); cannot convert PDF"
     continue
   fi
 
@@ -75,7 +96,7 @@ for pdf in "$STATEMENTS_DIR"/*_statement.pdf(N); do
       echo "institution: unknown"
       echo "statement_type: unknown"
       echo "imported_at: \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\""
-      echo "status: needs_review"
+      echo "status: ready"
       echo "contains_sensitive_financial_data: true"
       echo "---"
       echo
@@ -90,21 +111,23 @@ for pdf in "$STATEMENTS_DIR"/*_statement.pdf(N); do
   rm -f "$temp_md"
 done
 
-# 2) Extract CSVs for ready Markdown statements.
+# 2) Extract CSVs for Markdown statements. Every un-processed statement is handled
+#    automatically — no manual "status: ready" step. To hold one back, set its
+#    frontmatter `status:` to hold / skip / draft / ignore.
 for md in "$STATEMENTS_DIR"/*_statement.md(N); do
   base="${md:r}"
   manifest="${base}.json"
 
-  if ! grep -Eq '^status:[[:space:]]*ready|^review_status:[[:space:]]*ready' "$md"; then
-    continue
-  fi
-
   if [[ -f "$manifest" ]]; then
-    log "Skipping ready statement with existing manifest: ${manifest:t}"
+    continue  # already processed
+  fi
+
+  if grep -Eiq '^status:[[:space:]]*(hold|skip|draft|ignore)\b' "$md"; then
+    log "Holding ${md:t} (frontmatter status marks it on hold); skipping"
     continue
   fi
 
-  log "Processing ready statement: ${md:t}"
+  log "Processing statement: ${md:t}"
 
   # Route via the statement-type registry (config/statement_types.yml). The resolver
   # emits eval-able assignments for extractor, inst, stype, and schema_dir.
@@ -145,28 +168,39 @@ for md in "$STATEMENTS_DIR"/*_statement.md(N); do
   log "Completed pipeline for: ${md:t}"
 done
 
-# Rebuild consolidated advisor inputs once, after all new statements are processed
-# (not per-statement), then gate on data quality.
-if [[ "$advisor_inputs_dirty" == true ]]; then
-  log "Rebuilding consolidated advisor inputs"
-
-  if "$PYTHON_BIN" "$REPO_DIR/scripts/build_advisor_inputs.py"; then
-    log "Advisor inputs rebuilt successfully"
-  else
-    log "FAILED: Advisor input rebuild failed" >&2
+# After processing, rebuild the whole combined view so the dashboard and monthly
+# review prompt are always current — no manual step. Runs when a new statement was
+# processed, or when --rebuild is passed (e.g. a linked-only refresh).
+if [[ "$advisor_inputs_dirty" == true || "$force_rebuild" == true ]]; then
+  log "Rebuilding combined view (masters, reconcile, dashboard, review prompt, bundle)"
+  ingest_args=( "$REPO_DIR/scripts/ingest_linked_export.py"
+                --inputs-dir "$INPUTS_DIR" --reviews-dir "$REVIEWS_DIR"
+                --accounts-dir "$ACCOUNTS_DIR" --statements-dir "$STATEMENTS_DIR" )
+  [[ -n "$source_dir" ]] && ingest_args+=( --source "$source_dir" )
+  if ! "$PYTHON_BIN" "${ingest_args[@]}"; then
+    log "FAILED: combined-view rebuild failed" >&2
     exit 1
   fi
 
-  # Gate: run data-quality checks after rebuilding masters. Warnings are logged;
-  # hard errors are logged but do not abort (the report captures the detail).
-  if [[ -f "$REPO_DIR/scripts/check_finance_data_quality.py" ]]; then
-    log "Running data-quality checks"
-    if "$PYTHON_BIN" "$REPO_DIR/scripts/check_finance_data_quality.py"; then
-      log "Data-quality checks passed"
-    else
-      log "WARNING: Data-quality checks reported errors; see Reviews/data_quality_report.md" >&2
-    fi
+  # Data-quality gate on the rebuilt masters (warnings are logged, not fatal).
+  if "$PYTHON_BIN" "$REPO_DIR/scripts/check_finance_data_quality.py" \
+       --statements-dir "$STATEMENTS_DIR" --inputs-dir "$INPUTS_DIR" --reviews-dir "$REVIEWS_DIR"; then
+    log "Data-quality checks passed"
+  else
+    log "WARNING: data-quality errors; see $REVIEWS_DIR/data_quality_report.md" >&2
+  fi
+
+  if [[ "$do_archive" == true ]]; then
+    "$PYTHON_BIN" "$REPO_DIR/scripts/archive_month.py" \
+      --statements-dir "$STATEMENTS_DIR" --reviews-dir "$REVIEWS_DIR" \
+      || log "WARNING: archive step reported a problem" >&2
+  fi
+
+  review_prompts=( "$REVIEWS_DIR"/*_monthly_review_prompt.md(Nom) )
+  if (( ${#review_prompts} )); then
+    log "Done. Paste into ChatGPT: ${review_prompts[1]}"
+    log "Upload bundle: $REVIEWS_DIR/advisor_bundle/"
   fi
 else
-  log "Advisor inputs unchanged; rebuild not required"
+  log "No new statements and no --rebuild; nothing to rebuild."
 fi
